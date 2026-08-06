@@ -121,7 +121,9 @@ if df_games is not None:
     st.sidebar.write(f"- Tổng số Portal: `{len(portals)}`")
     st.sidebar.write(f"- Tổng số đầu game: `{df_games['Game'].nunique()}`")
     if df_accounts is not None and not df_accounts.empty:
-        st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
+        # Lọc theo portal hiện tại để thống kê chính xác số acc của portal đó
+        portal_accs_count = len(df_accounts[df_accounts['Portal'] == selected_portal])
+        st.sidebar.write(f"- Số tài khoản test của Portal: `{portal_accs_count}`")
         
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
@@ -208,7 +210,7 @@ if df_games is not None:
             
         st.write("---")
         
-        # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp
+        # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (ẨN TẠM THỜI CỘT PASSWORD)
         st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
         
         if df_accounts is not None and not df_accounts.empty:
@@ -216,40 +218,13 @@ if df_games is not None:
             portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
             
             if len(portal_accs) > 0:
-                # Tiêu đề cột
-                col_u_hdr, col_p_hdr, col_b_hdr = st.columns([3, 3, 1])
-                with col_u_hdr:
-                    st.markdown("**👤 Username**")
-                with col_p_hdr:
-                    st.markdown("**🔒 Password**")
-                with col_b_hdr:
-                    st.markdown("<div style='text-align: center;'><b>Show</b></div>", unsafe_allow_html=True)
+                st.markdown("**👤 Username**")
                 
-                # Hiển thị từng tài khoản với nút Show/Hide riêng biệt
+                # Hiển thị danh sách username với chức năng copy tích hợp sẵn
                 for idx, row in portal_accs.reset_index(drop=True).iterrows():
-                    # Tạo khóa session_state riêng cho từng tài khoản để quản lý trạng thái show/hide độc lập
-                    key = f"show_{selected_portal}_{idx}_{row['Username']}"
-                    if key not in st.session_state:
-                        st.session_state[key] = False
+                    st.code(row['Username'], language="")
                     
-                    st.markdown("<div style='margin: 1px 0;'>", unsafe_allow_html=True)
-                    col_user, col_pass, col_btn = st.columns([3, 3, 1])
-                    
-                    with col_user:
-                        st.code(row['Username'], language="")
-                        
-                    with col_pass:
-                        display_pass = row['Password'] if st.session_state[key] else "••••••••"
-                        st.code(display_pass, language="")
-                        
-                    with col_btn:
-                        btn_label = "🔒 Hide" if st.session_state[key] else "👁️ Show"
-                        if st.button(btn_label, key=f"btn_{key}", use_container_width=True):
-                            st.session_state[key] = not st.session_state[key]
-                            st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    
-                st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username/Password để copy nhanh.")
+                st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
             else:
                 st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
         else:
