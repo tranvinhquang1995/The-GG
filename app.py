@@ -87,7 +87,8 @@ df_games = load_games_data(G_SHEET_GAMES_URL)
 df_accounts = load_accounts_data(G_SHEET_ACCOUNTS_URL)
 
 if df_games is not None:
-    # --- PHẦN SIDEBAR TRÁI ---\n    st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
+    # --- PHẦN SIDEBAR TRÁI ---
+    st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
     # Nút bấm làm mới dữ liệu thủ công
@@ -175,18 +176,21 @@ if df_games is not None:
             
     # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
     with col_right:
-        # 1. Minigame nhà
+        # 1. Minigame nhà (ĐÃ SỬA LỖI RỚT KHUNG)
         st.subheader("🃏 Minigame Nhà")
         if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
             st.info("Cổng này hiện **không có** Minigame nhà.")
         else:
-            st.markdown("<div class='minigame-container'>", unsafe_allow_html=True)
             # Tách các minigame nếu chúng cách nhau bằng thẻ <br> hoặc xuống dòng
             m_list = re.split(r'<br>|\n', str(minigames_raw))
+            # Ghép toàn bộ nội dung HTML lại để render trong 1 hàm st.markdown duy nhất
+            minigame_html = "<div class='minigame-container'>"
             for m in m_list:
                 if m.strip():
-                    st.write(f"🔹 **{m.strip()}**")
-            st.markdown("</div>", unsafe_allow_html=True)
+                    minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
+            minigame_html += "</div>"
+            
+            st.markdown(minigame_html, unsafe_allow_html=True)
             
         st.write("---")
         
