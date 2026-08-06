@@ -42,7 +42,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. Cấu hình URL xuất CSV từ 2 Tabs mới của bạn
-# Mặc định sử dụng file CSV sạch đã tạo, người dùng sẽ cấu hình Streamlit Secrets để trỏ tới link Google Sheet thật
 G_SHEET_GAMES_URL = st.secrets.get(
     "g_sheet_games_url", 
     "the_gg_games_tab.csv" # Mặc định chạy local bằng file CSV đi kèm
@@ -113,8 +112,8 @@ if df_games is not None:
     
     # Bộ lọc tìm kiếm nhanh game (TOÀN CỤC)
     st.sidebar.write("---")
-    st.sidebar.subheader("🔍 Tìm kiếm Game (Toàn cục)")
-    search_query = st.sidebar.text_input("Nhập tên hoặc mã game để quét toàn hệ thống:", "").strip()
+    st.sidebar.subheader("Tìm kiếm Game")
+    search_query = st.sidebar.text_input("Nhập tên hoặc mã game", "").strip()
     
     # Thống kê nhanh ở sidebar
     st.sidebar.write("---")
