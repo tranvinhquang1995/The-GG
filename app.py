@@ -33,14 +33,18 @@ st.markdown("""
         border: 1px solid #30363D;
         margin-bottom: 6px;
     }
+    .account-row {
+        padding: 8px 0;
+        border-bottom: 1px solid #222;
+        align-items: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # 2. Cấu hình URL xuất CSV từ 2 Tabs mới của bạn
-# Mặc định sử dụng file CSV sạch đã tạo, người dùng sẽ cấu hình Streamlit Secrets để trỏ tới link Google Sheet thật
 G_SHEET_GAMES_URL = st.secrets.get(
     "g_sheet_games_url", 
-    "the_gg_games_tab.csv" # Có thể chạy local bằng file CSV đi kèm
+    "the_gg_games_tab.csv" # Mặc định chạy local bằng file CSV đi kèm
 )
 G_SHEET_ACCOUNTS_URL = st.secrets.get(
     "g_sheet_accounts_url", 
@@ -118,6 +122,16 @@ if df_games is not None:
     st.sidebar.write(f"- Tổng số đầu game: `{df_games['Game'].nunique()}`")
     if df_accounts is not None and not df_accounts.empty:
         st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
+        
+    # Thêm Copyright trong Sidebar
+    st.sidebar.write("---")
+    st.sidebar.markdown(
+        "<div style='text-align: center; color: #888888; font-size: 11px;'>"
+        "© 2026 The GG App<br>"
+        "Developed by <b>Nobita</b>"
+        "</div>", 
+        unsafe_allow_html=True
+    )
 
     # --- KHU VỰC TRANG CHÍNH ---
     # Lấy thông tin game của Portal được chọn
@@ -202,14 +216,53 @@ if df_games is not None:
             portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
             
             if len(portal_accs) > 0:
-                # Hiển thị danh sách tài khoản chỉ bao gồm Username và Password dưới dạng bảng DataFrame tinh gọn của Streamlit
-                # Loại bỏ hoàn toàn các cột STT, Trạng thái, v.v.
-                acc_display = portal_accs[['Username', 'Password']].reset_index(drop=True)
-                st.dataframe(acc_display, use_container_width=True, hide_index=True)
-                st.caption("💡 Bạn có thể bấm đúp vào ô để sao chép nhanh Username hoặc Password.")
+                # Tiêu đề cột
+                col_u_hdr, col_p_hdr, col_b_hdr = st.columns([3, 3, 1])
+                with col_u_hdr:
+                    st.markdown("**👤 Username**")
+                with col_p_hdr:
+                    st.markdown("**🔒 Password**")
+                with col_b_hdr:
+                    st.markdown("<div style='text-align: center;'><b>Show</b></div>", unsafe_allow_html=True)
+                
+                # Hiển thị từng tài khoản với nút Show/Hide riêng biệt
+                for idx, row in portal_accs.reset_index(drop=True).iterrows():
+                    # Tạo khóa session_state riêng cho từng tài khoản để quản lý trạng thái show/hide độc lập
+                    key = f"show_{selected_portal}_{idx}_{row['Username']}"
+                    if key not in st.session_state:
+                        st.session_state[key] = False
+                    
+                    st.markdown("<div style='margin: 1px 0;'>", unsafe_allow_html=True)
+                    col_user, col_pass, col_btn = st.columns([3, 3, 1])
+                    
+                    with col_user:
+                        st.code(row['Username'], language="")
+                        
+                    with col_pass:
+                        display_pass = row['Password'] if st.session_state[key] else "••••••••"
+                        st.code(display_pass, language="")
+                        
+                    with col_btn:
+                        btn_label = "🔒 Hide" if st.session_state[key] else "👁️ Show"
+                        if st.button(btn_label, key=f"btn_{key}", use_container_width=True):
+                            st.session_state[key] = not st.session_state[key]
+                            st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    
+                st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username/Password để copy nhanh.")
             else:
                 st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
         else:
             st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
+            
+    # Phần copyright ở chân trang chính
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>"
+        "© 2026 The GG. All rights reserved. <br>"
+        "Developed by <b>Nobita</b>"
+        "</div>", 
+        unsafe_allow_html=True
+    )
 else:
     st.info("Vui lòng cấu hình URL Google Sheet của bạn trong cài đặt secrets.")
