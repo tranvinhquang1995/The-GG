@@ -87,8 +87,7 @@ df_games = load_games_data(G_SHEET_GAMES_URL)
 df_accounts = load_accounts_data(G_SHEET_ACCOUNTS_URL)
 
 if df_games is not None:
-    # --- PHẦN SIDEBAR TRÁI ---
-    st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
+    # --- PHẦN SIDEBAR TRÁI ---\n    st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
     # Nút bấm làm mới dữ liệu thủ công
@@ -128,14 +127,16 @@ if df_games is not None:
     portal_link = first_row['Link']
     minigames_raw = first_row['Minigame nhà']
     
-    # Tiêu đề và nút mở nhanh cổng game
+    # Tiêu đề Portal
     st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
     
-    col_link, col_btn = st.columns([3, 1])
-    with col_link:
-        st.markdown(f"**🔗 Đường dẫn truy cập:** [{portal_link}]({portal_link})")
-    with col_btn:
-        st.link_button("🌐 Mở Cổng Game", portal_link, type="primary", use_container_width=True)
+    # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
+    link_str = str(portal_link).strip()
+    if ": " in link_str:
+        label, url = link_str.split(": ", 1)
+        st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
+    else:
+        st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
         
     st.write("---")
     
@@ -197,15 +198,11 @@ if df_games is not None:
             portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
             
             if len(portal_accs) > 0:
-                # Hiển thị bảng tài khoản test được định dạng chuyên nghiệp
-                st.markdown("""
-                | STT | 👤 Tài khoản (Username) | 🔒 Mật khẩu (Password) | Trạng thái |
-                | :---: | :--- | :--- | :---: |
-                """ + "\n".join([
-                    f"| {idx+1} | `{row['Username']}` | `{row['Password']}` | 🟢 Sẵn sàng |"
-                    for idx, row in portal_accs.reset_index(drop=True).iterrows()
-                ]))
-                st.caption("💡 Click đúp vào Username hoặc Password để sao chép nhanh.")
+                # Hiển thị danh sách tài khoản chỉ bao gồm Username và Password dưới dạng bảng DataFrame tinh gọn của Streamlit
+                # Loại bỏ hoàn toàn các cột STT, Trạng thái, v.v.
+                acc_display = portal_accs[['Username', 'Password']].reset_index(drop=True)
+                st.dataframe(acc_display, use_container_width=True, hide_index=True)
+                st.caption("💡 Bạn có thể bấm đúp vào ô để sao chép nhanh Username hoặc Password.")
             else:
                 st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
         else:
