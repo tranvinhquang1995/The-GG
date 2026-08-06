@@ -110,10 +110,10 @@ if df_games is not None:
         index=0
     )
     
-    # Bộ lọc tìm kiếm nhanh tên game
+    # Bộ lọc tìm kiếm nhanh game (TOÀN CỤC)
     st.sidebar.write("---")
-    st.sidebar.subheader("🔍 Tìm kiếm nhanh Game")
-    search_query = st.sidebar.text_input("Nhập tên hoặc mã game:", "").strip()
+    st.sidebar.subheader("Tìm kiếm Game")
+    search_query = st.sidebar.text_input("Nhập tên hoặc mã game", "").strip()
     
     # Thống kê nhanh ở sidebar
     st.sidebar.write("---")
@@ -121,9 +121,7 @@ if df_games is not None:
     st.sidebar.write(f"- Tổng số Portal: `{len(portals)}`")
     st.sidebar.write(f"- Tổng số đầu game: `{df_games['Game'].nunique()}`")
     if df_accounts is not None and not df_accounts.empty:
-        # Lọc theo portal hiện tại để thống kê chính xác số acc của portal đó
-        portal_accs_count = len(df_accounts[df_accounts['Portal'] == selected_portal])
-        st.sidebar.write(f"- Số tài khoản test của Portal: `{portal_accs_count}`")
+        st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
         
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
@@ -136,100 +134,128 @@ if df_games is not None:
     )
 
     # --- KHU VỰC TRANG CHÍNH ---
-    # Lấy thông tin game của Portal được chọn
-    portal_games = df_games[df_games['Portal'] == selected_portal]
-    
-    # Lấy thông tin chung của Portal từ dòng đầu tiên trong nhóm
-    first_row = portal_games.iloc[0]
-    portal_link = first_row['Link']
-    minigames_raw = first_row['Minigame nhà']
-    
-    # Tiêu đề Portal
-    st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
-    
-    # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
-    link_str = str(portal_link).strip()
-    if ": " in link_str:
-        label, url = link_str.split(": ", 1)
-        st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
-    else:
-        st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
-        
-    st.write("---")
-    
-    # Áp dụng bộ lọc tìm kiếm nếu có nhập từ khóa
+    # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
     if search_query:
-        # Tìm kiếm không phân biệt hoa thường
-        filtered_games = portal_games[portal_games['Game'].str.contains(search_query, case=False, na=False)]
-        st.info(f"🔍 Kết quả tìm kiếm từ khóa '{search_query}' trong Portal {selected_portal}:")
+        st.markdown(f"<div class='main-title'>Kết quả tìm kiếm toàn cục: \"{search_query}\"</div>", unsafe_allow_html=True)
+        st.write("---")
+        
+        # Tìm kiếm không phân biệt hoa thường trên toàn bộ danh sách game của tất cả các Portal
+        filtered_games = df_games[df_games['Game'].str.contains(search_query, case=False, na=False)]
+        
         if filtered_games.empty:
-            st.warning("Không tìm thấy game nào khớp với từ khóa tìm kiếm.")
+            st.warning("❌ Không tìm thấy game nào khớp với từ khóa tìm kiếm trên toàn hệ thống.")
         else:
-            for idx, row in filtered_games.iterrows():
-                st.markdown(f"<div class='game-card'>📂 <b>{row['Thể loại']}</b> | {row['Game']}</div>", unsafe_allow_html=True)
-        st.write("---")
-    
-    col_left, col_right = st.columns([1, 1])
-    
-    # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME PHÂN THEO THỂ LOẠI
-    with col_left:
-        st.subheader("🎮 Danh Sách Trò Chơi")
-        categories = portal_games['Thể loại'].unique()
-        
-        for category in categories:
-            st.markdown(f"##### 📂 {category}")
-            cat_games = portal_games[portal_games['Thể loại'] == category]['Game'].tolist()
+            st.success(f"🔍 Tìm thấy {len(filtered_games)} kết quả phù hợp từ các Portal:")
             
-            for game in cat_games:
-                parts = game.strip().split(" ", 1)
-                # Đổi màu mã số game cho nổi bật và dễ nhìn
-                if len(parts) == 2 and parts[0].isdigit():
-                    game_html = f"<div class='game-card'><span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}</div>"
-                else:
-                    game_html = f"<div class='game-card'>{game}</div>"
-                st.markdown(game_html, unsafe_allow_html=True)
-            st.write("")
+            # Nhóm kết quả theo Portal để hiển thị trực quan hơn
+            grouped_results = filtered_games.groupby('Portal')
             
-    # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
-    with col_right:
-        # 1. Minigame nhà (ĐÃ SỬA LỖI RỚT KHUNG)
-        st.subheader("🃏 Minigame Nhà")
-        if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
-            st.info("Cổng này hiện **không có** Minigame nhà.")
-        else:
-            # Tách các minigame nếu chúng cách nhau bằng thẻ <br> hoặc xuống dòng
-            m_list = re.split(r'<br>|\n', str(minigames_raw))
-            # Ghép toàn bộ nội dung HTML lại để render trong 1 hàm st.markdown duy nhất
-            minigame_html = "<div class='minigame-container'>"
-            for m in m_list:
-                if m.strip():
-                    minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
-            minigame_html += "</div>"
-            
-            st.markdown(minigame_html, unsafe_allow_html=True)
-            
-        st.write("---")
-        
-        # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (ẨN TẠM THỜI CỘT PASSWORD)
-        st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
-        
-        if df_accounts is not None and not df_accounts.empty:
-            # Lọc tài khoản tương ứng với Portal được chọn
-            portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
-            
-            if len(portal_accs) > 0:
-                st.markdown("**👤 Username**")
+            for portal_id, group in grouped_results:
+                st.markdown(f"#### 📍 Portal {portal_id}")
+                portal_link = group.iloc[0]['Link']
                 
-                # Hiển thị danh sách username với chức năng copy tích hợp sẵn
-                for idx, row in portal_accs.reset_index(drop=True).iterrows():
-                    st.code(row['Username'], language="")
-                    
-                st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
-            else:
-                st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
+                # Hiển thị đường link dạng text clickable đẹp mắt cho Portal tương ứng
+                link_str = str(portal_link).strip()
+                if ": " in link_str:
+                    label, url = link_str.split(": ", 1)
+                    st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
+                else:
+                    st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
+                
+                # Liệt kê các game thỏa mãn điều kiện thuộc Portal này
+                for idx, row in group.iterrows():
+                    parts = row['Game'].strip().split(" ", 1)
+                    if len(parts) == 2 and parts[0].isdigit():
+                        game_html = f"<div class='game-card'>📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}</div>"
+                    else:
+                        game_html = f"<div class='game-card'>📂 <b>{row['Thể loại']}</b> | {row['Game']}</div>"
+                    st.markdown(game_html, unsafe_allow_html=True)
+                st.write("")
+        st.write("---")
+        
+    else:
+        # Nếu không có từ khóa tìm kiếm, hiển thị chi tiết theo Portal được chọn (Mặc định)
+        portal_games = df_games[df_games['Portal'] == selected_portal]
+        
+        # Lấy thông tin chung của Portal từ dòng đầu tiên trong nhóm
+        first_row = portal_games.iloc[0]
+        portal_link = first_row['Link']
+        minigames_raw = first_row['Minigame nhà']
+        
+        # Tiêu đề Portal
+        st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
+        
+        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
+        link_str = str(portal_link).strip()
+        if ": " in link_str:
+            label, url = link_str.split(": ", 1)
+            st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
         else:
-            st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
+            st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
             
+        st.write("---")
+        
+        col_left, col_right = st.columns([1, 1])
+        
+        # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME PHÂN THEO THỂ LOẠI
+        with col_left:
+            st.subheader("🎮 Danh Sách Trò Chơi")
+            categories = portal_games['Thể loại'].unique()
+            
+            for category in categories:
+                st.markdown(f"##### 📂 {category}")
+                cat_games = portal_games[portal_games['Thể loại'] == category]['Game'].tolist()
+                
+                for game in cat_games:
+                    parts = game.strip().split(" ", 1)
+                    # Đổi màu mã số game cho nổi bật và dễ nhìn
+                    if len(parts) == 2 and parts[0].isdigit():
+                        game_html = f"<div class='game-card'><span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}</div>"
+                    else:
+                        game_html = f"<div class='game-card'>{game}</div>"
+                    st.markdown(game_html, unsafe_allow_html=True)
+                st.write("")
+                
+        # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
+        with col_right:
+            # 1. Minigame nhà (ĐÃ SỬA LỖI RỚT KHUNG)
+            st.subheader("🃏 Minigame Nhà")
+            if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
+                st.info("Cổng này hiện **không có** Minigame nhà.")
+            else:
+                # Tách các minigame nếu chúng cách nhau bằng thẻ <br> hoặc xuống dòng
+                m_list = re.split(r'<br>|\n', str(minigames_raw))
+                # Ghép toàn bộ nội dung HTML lại để render trong 1 hàm st.markdown duy nhất để text luôn ở TRONG khung xám
+                minigame_html = "<div class='minigame-container'>"
+                for m in m_list:
+                    if m.strip():
+                        minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
+                minigame_html += "</div>"
+                
+                st.markdown(minigame_html, unsafe_allow_html=True)
+                
+            st.write("---")
+            
+            # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (TẠM THỜI ẨN CỘT PASSWORD)
+            st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
+            
+            if df_accounts is not None and not df_accounts.empty:
+                # Lọc tài khoản tương ứng với Portal được chọn
+                portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
+                
+                if len(portal_accs) > 0:
+                    st.markdown("**👤 Username**")
+                    
+                    # Hiển thị danh sách username dưới dạng các ô mã code hỗ trợ copy nhanh
+                    for idx, row in portal_accs.reset_index(drop=True).iterrows():
+                        st.code(row['Username'], language="")
+                        
+                    st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
+                else:
+                    st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
+            else:
+                st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
+                
     # Phần copyright ở chân trang chính
     st.markdown("---")
     st.markdown(
