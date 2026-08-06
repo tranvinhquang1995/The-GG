@@ -96,7 +96,7 @@ if df_games is not None:
     st.sidebar.write("---")
     
     # Nút bấm làm mới dữ liệu thủ công
-    if st.sidebar.button("🔄 Làm mới dữ liệu từ Google Sheet"):
+    if st.sidebar.button("🔄 Làm mới dữ liệu"):
         st.cache_data.clear()
         st.rerun()
 
@@ -265,4 +265,4 @@ if df_games is not None:
         unsafe_allow_html=True
     )
 else:
-    st.info("Vui lòng cấu hình URL Google Sheet của bạn trong cài đặt secrets.")
+    st.info("Vui lòng cấu hình URL Database của bạn trong cài đặt secrets.")
