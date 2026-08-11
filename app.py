@@ -42,6 +42,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. Cấu hình URL xuất CSV từ 2 Tabs mới của bạn
+# Mặc định sử dụng file CSV sạch đã tạo, người dùng sẽ cấu hình Streamlit Secrets để trỏ tới link Google Sheet thật
 G_SHEET_GAMES_URL = st.secrets.get(
     "g_sheet_games_url", 
     "the_gg_games_tab.csv" # Mặc định chạy local bằng file CSV đi kèm
@@ -95,14 +96,19 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # Nút bấm làm mới dữ liệu thủ công
-    if st.sidebar.button("🔄 Làm mới dữ liệu"):
-        st.cache_data.clear()
-        st.rerun()
+    # Bố cục 2 cột nằm cạnh nhau trên Sidebar (Làm mới dữ liệu & Attachment Center)
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        if st.button("🔄 Làm mới dữ liệu", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    with col2:
+        st.link_button("Attachment Center", "#", use_container_width=True)
 
     # Danh sách các Portal duy nhất
     portals = sorted(df_games['Portal'].unique())
     
+    st.sidebar.write("---")
     st.sidebar.subheader("📍 Chọn Cổng Game")
     selected_portal = st.sidebar.selectbox(
         "Lọc theo mã Portal:",
@@ -185,7 +191,7 @@ if df_games is not None:
         # Tiêu đề Portal
         st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
         
-        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
+        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button \"Mở Cổng Game\"
         link_str = str(portal_link).strip()
         if ": " in link_str:
             label, url = link_str.split(": ", 1)
