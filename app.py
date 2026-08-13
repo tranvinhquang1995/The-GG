@@ -32,9 +32,6 @@ st.markdown("""
         border-radius: 5px;
         border: 1px solid #30363D;
         margin-bottom: 6px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
     }
     
     /* Cấu trúc Tooltip CSS siêu mượt */
@@ -238,7 +235,7 @@ if df_games is not None:
                         </div>
                         """
                     else:
-                        game_html = f"<div class='game-card'>{game_text}</div>"
+                        game_html = f"<div class='game-card'><span>{game_text}</span></div>"
                         
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
@@ -294,7 +291,7 @@ if df_games is not None:
                         </div>
                         """
                     else:
-                        game_html = f"<div class='game-card'>{game_text}</div>"
+                        game_html = f"<div class='game-card'><span>{game_text}</span></div>"
                         
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
