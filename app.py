@@ -96,14 +96,12 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # Bố cục 2 cột nằm cạnh nhau trên Sidebar (Làm mới dữ liệu & Attachment Center)
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        if st.button("🔄 Làm mới dữ liệu", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-    with col2:
-        st.link_button("Attachment Center", "#", use_container_width=True)
+    # HIỂN THỊ 2 BUTTON TRÊN 2 DÒNG RIÊNG BIỆT ĐỂ KHÔNG BỊ TRÀN CHỮ VÀ CÂN ĐỐI
+    if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+        
+    st.sidebar.link_button("📎 Attachment Center", "#", use_container_width=True)
 
     # Danh sách các Portal duy nhất
     portals = sorted(df_games['Portal'].unique())
@@ -191,7 +189,7 @@ if df_games is not None:
         # Tiêu đề Portal
         st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
         
-        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button \"Mở Cổng Game\"
+        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
         link_str = str(portal_link).strip()
         if ": " in link_str:
             label, url = link_str.split(": ", 1)
