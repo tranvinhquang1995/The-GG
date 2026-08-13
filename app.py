@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Thiết lập giao diện Dark Mode hiện đại bằng CSS
+# Thiết lập giao diện Dark Mode hiện đại bằng CSS kết hợp Tooltip hover hình ảnh
 st.markdown("""
 <style>
     .main-title {
@@ -32,22 +32,18 @@ st.markdown("""
         border-radius: 5px;
         border: 1px solid #30363D;
         margin-bottom: 6px;
-        transition: border-color 0.3s ease;
-    }
-    .game-card:hover {
-        border-color: #FF4B4B;
-    }
-    .account-row {
-        padding: 8px 0;
-        border-bottom: 1px solid #222;
+        display: flex;
+        justify-content: space-between;
         align-items: center;
     }
     
-    /* TOOLTIP HOVER SHOW IMAGE CSS */
+    /* Cấu trúc Tooltip CSS siêu mượt */
     .tooltip-container {
         position: relative;
         display: block;
         width: 100%;
+        text-decoration: none;
+        color: inherit;
     }
     .tooltip-container .tooltip-image {
         visibility: hidden;
@@ -58,14 +54,11 @@ st.markdown("""
         background-color: #1E1E24;
         padding: 5px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-        
-        /* Position to the right of the game card with some padding */
         top: 50%;
         left: 102%;
         transform: translateY(-50%);
-        
         opacity: 0;
-        transition: opacity 0.3s ease, visibility 0.3s ease;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
         max-width: 250px;
         max-height: 180px;
         height: auto;
@@ -87,13 +80,31 @@ G_SHEET_ACCOUNTS_URL = st.secrets.get(
     "the_gg_accounts_tab.csv"
 )
 
-# 3. Hàm tải dữ liệu Tab Games (Xử lý gộp dòng ffill phòng trường hợp bạn copy/paste thủ công)
-@st.cache_data(ttl=120)  # Bộ nhớ đệm 2 phút để tự động cập nhật khi bạn sửa Sheet
+# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Direct Image Link)
+def convert_google_drive_link(link):
+    if pd.isna(link) or not isinstance(link, str):
+        return ""
+    link = link.strip()
+    
+    # Pattern 1: https://drive.google.com/file/d/FILE_ID/view?usp=sharing hoặc tương tự
+    match_file = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', link)
+    if match_file:
+        file_id = match_file.group(1)
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        
+    # Pattern 2: https://drive.google.com/open?id=FILE_ID
+    match_open = re.search(r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)', link)
+    if match_open:
+        file_id = match_open.group(1)
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        
+    return link
+
+# 3. Hàm tải dữ liệu Tab Games (Xử lý gộp dòng ffill và làm sạch cột Image)
+@st.cache_data(ttl=120)
 def load_games_data(url_or_path):
     try:
         df = pd.read_csv(url_or_path, dtype={'Portal': str})
-        
-        # Làm sạch cột Portal
         df['Portal'] = df['Portal'].astype(str).str.strip()
         
         # Tự động điền các ô trống do gộp dòng (ffill)
@@ -102,19 +113,22 @@ def load_games_data(url_or_path):
         df['Minigame nhà'] = df['Minigame nhà'].ffill()
         df['Thể loại'] = df.groupby('Portal')['Thể loại'].ffill()
         
-        # Tải cột Image nếu có, không sử dụng ffill cho Image vì mỗi game có hình ảnh riêng biệt
-        if 'Image' in df.columns:
-            df['Image'] = df['Image'].fillna("").astype(str).str.strip()
-        else:
+        # Nếu cột Image chưa tồn tại, tự động tạo cột trống
+        if 'Image' not in df.columns:
             df['Image'] = ""
             
+        df['Image'] = df['Image'].ffill()
         df['Game'] = df['Game'].fillna("Không rõ tên")
+        
+        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp
+        df['Image'] = df['Image'].apply(convert_google_drive_link)
+        
         return df
     except Exception as e:
         st.error(f"❌ Không thể tải dữ liệu Games. Chi tiết lỗi: {e}")
         return None
 
-# 4. Hàm tải dữ liệu Tab Accounts (Cấu trúc bảng sạch 3 cột)
+# 4. Hàm tải dữ liệu Tab Accounts
 @st.cache_data(ttl=120)
 def load_accounts_data(url_or_path):
     try:
@@ -135,7 +149,7 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # Hiển thị mỗi button trên 1 dòng riêng biệt để tránh tràn chữ và cân đối tuyệt đối
+    # Hiển thị mỗi button trên 1 dòng riêng biệt để tránh tràn chữ và cân đối
     if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -182,22 +196,18 @@ if df_games is not None:
         st.markdown(f"<div class='main-title'>Kết quả tìm kiếm toàn cục: \"{search_query}\"</div>", unsafe_allow_html=True)
         st.write("---")
         
-        # Tìm kiếm không phân biệt hoa thường trên toàn bộ danh sách game của tất cả các Portal
         filtered_games = df_games[df_games['Game'].str.contains(search_query, case=False, na=False)]
         
         if filtered_games.empty:
             st.warning("❌ Không tìm thấy game nào khớp với từ khóa tìm kiếm trên toàn hệ thống.")
         else:
             st.success(f"🔍 Tìm thấy {len(filtered_games)} kết quả phù hợp từ các Portal:")
-            
-            # Nhóm kết quả theo Portal để hiển thị trực quan hơn
             grouped_results = filtered_games.groupby('Portal')
             
             for portal_id, group in grouped_results:
                 st.markdown(f"#### 📍 Portal {portal_id}")
                 portal_link = group.iloc[0]['Link']
                 
-                # Hiển thị đường link dạng text clickable đẹp mắt cho Portal tương ứng
                 link_str = str(portal_link).strip()
                 if ": " in link_str:
                     label, url = link_str.split(": ", 1)
@@ -205,44 +215,43 @@ if df_games is not None:
                 else:
                     st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
                 
-                # Liệt kê các game thỏa mãn điều kiện thuộc Portal này
                 for idx, row in group.iterrows():
                     parts = row['Game'].strip().split(" ", 1)
-                    image_url = str(row.get('Image', '')).strip() if 'Image' in row else ''
-                    has_image = pd.notna(row.get('Image')) and image_url.lower().startswith(('http://', 'https://'))
+                    img_url = row['Image'] if pd.notna(row['Image']) and str(row['Image']).strip() else ""
                     
+                    # Xác định chuỗi tên hiển thị
                     if len(parts) == 2 and parts[0].isdigit():
                         game_text = f"📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
                     else:
                         game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
                         
-                    # Hiển thị kèm Tooltip hover ảnh nếu có link ảnh hợp lệ
-                    if has_image:
+                    # Dựng thẻ HTML hover hình ảnh
+                    if img_url:
                         game_html = f"""
-                        <div class="tooltip-container">
-                            <div class="game-card">{game_text}</div>
-                            <img class="tooltip-image" src="{image_url}" alt="{row['Game']}" />
+                        <div class='tooltip-container'>
+                            <div class='game-card'>
+                                <span>{game_text}</span>
+                                <span style='font-size: 11px; color: #888;'>🖼️ Hover xem ảnh</span>
+                            </div>
+                            <img class='tooltip-image' src='{img_url}' alt='{row["Game"]}'>
                         </div>
                         """
                     else:
                         game_html = f"<div class='game-card'>{game_text}</div>"
+                        
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
         st.write("---")
         
     else:
-        # Nếu không có từ khóa tìm kiếm, hiển thị chi tiết theo Portal được chọn (Mặc định)
+        # Hiển thị chi tiết theo Portal được chọn (Mặc định)
         portal_games = df_games[df_games['Portal'] == selected_portal]
-        
-        # Lấy thông tin chung của Portal từ dòng đầu tiên trong nhóm
         first_row = portal_games.iloc[0]
         portal_link = first_row['Link']
         minigames_raw = first_row['Minigame nhà']
         
-        # Tiêu đề Portal
         st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
         
-        # Hiển thị đường link dạng text clickable đẹp mắt, không trùng lặp, bỏ button "Mở Cổng Game"
         link_str = str(portal_link).strip()
         if ": " in link_str:
             label, url = link_str.split(": ", 1)
@@ -254,74 +263,66 @@ if df_games is not None:
         
         col_left, col_right = st.columns([1, 1])
         
-        # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME PHÂN THEO THỂ LOẠI
+        # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME CÓ HOVER HÌNH ẢNH
         with col_left:
             st.subheader("🎮 Danh Sách Trò Chơi")
             categories = portal_games['Thể loại'].unique()
             
             for category in categories:
                 st.markdown(f"##### 📂 {category}")
-                cat_games_df = portal_games[portal_games['Thể loại'] == category]
+                cat_data = portal_games[portal_games['Thể loại'] == category]
                 
-                for idx, row in cat_games_df.iterrows():
-                    game = row['Game']
-                    image_url = str(row.get('Image', '')).strip() if 'Image' in row else ''
-                    has_image = pd.notna(row.get('Image')) and image_url.lower().startswith(('http://', 'https://'))
+                for idx, row in cat_data.iterrows():
+                    game_name = row['Game']
+                    parts = game_name.strip().split(" ", 1)
+                    img_url = row['Image'] if pd.notna(row['Image']) and str(row['Image']).strip() else ""
                     
-                    parts = game.strip().split(" ", 1)
-                    # Đổi màu mã số game cho nổi bật và dễ nhìn
                     if len(parts) == 2 and parts[0].isdigit():
                         game_text = f"<span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
                     else:
-                        game_text = game
+                        game_text = game_name
                         
-                    # Hiển thị kèm Tooltip hover ảnh nếu có link ảnh hợp lệ
-                    if has_image:
+                    # Dựng thẻ HTML hover hình ảnh
+                    if img_url:
                         game_html = f"""
-                        <div class="tooltip-container">
-                            <div class="game-card">{game_text}</div>
-                            <img class="tooltip-image" src="{image_url}" alt="{game}" />
+                        <div class='tooltip-container'>
+                            <div class='game-card'>
+                                <span>{game_text}</span>
+                                <span style='font-size: 11px; color: #888;'>🖼️ Hover xem ảnh</span>
+                            </div>
+                            <img class='tooltip-image' src='{img_url}' alt='{game_name}'>
                         </div>
                         """
                     else:
                         game_html = f"<div class='game-card'>{game_text}</div>"
+                        
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
                 
         # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
         with col_right:
-            # 1. Minigame nhà (ĐÃ SỬA LỖI RỚT KHUNG)
             st.subheader("🃏 Minigame Nhà")
             if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
                 st.info("Cổng này hiện **không có** Minigame nhà.")
             else:
-                # Tách các minigame nếu chúng cách nhau bằng thẻ <br> hoặc xuống dòng
                 m_list = re.split(r'<br>|\n', str(minigames_raw))
-                # Ghép toàn bộ nội dung HTML lại để render trong 1 hàm st.markdown duy nhất để text luôn ở TRONG khung xám
                 minigame_html = "<div class='minigame-container'>"
                 for m in m_list:
                     if m.strip():
                         minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
                 minigame_html += "</div>"
-                
                 st.markdown(minigame_html, unsafe_allow_html=True)
                 
             st.write("---")
             
-            # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (TẠM THỜI ẨN CỘT PASSWORD)
             st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
-            
             if df_accounts is not None and not df_accounts.empty:
-                # Lọc tài khoản tương ứng với Portal được chọn
                 portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
                 
                 if len(portal_accs) > 0:
                     st.markdown("**👤 Username**")
-                    
-                    # Hiển thị danh sách username dưới dạng các ô mã code hỗ trợ copy nhanh
                     for idx, row in portal_accs.reset_index(drop=True).iterrows():
                         st.code(row['Username'], language="")
-                        
                     st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
                 else:
                     st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
