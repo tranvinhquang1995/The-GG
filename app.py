@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import re
+import os
+import base64
 
 # 1. Cấu hình giao diện Streamlit
 st.set_page_config(
@@ -32,6 +34,19 @@ st.markdown("""
         border-radius: 5px;
         border: 1px solid #30363D;
         margin-bottom: 6px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    /* Hiệu ứng viền đỏ và bóng sáng khi hover vào bất kỳ Game Card nào */
+    .game-card:hover, .tooltip-container:hover .game-card {
+        border-color: #FF4B4B !important;
+        box-shadow: 0 0 12px rgba(255, 75, 75, 0.4);
+    }
+    
+    .account-row {
+        padding: 8px 0;
+        border-bottom: 1px solid #222;
+        align-items: center;
     }
     
     /* Cấu trúc Tooltip CSS siêu mượt */
@@ -56,8 +71,11 @@ st.markdown("""
         transform: translateY(-50%);
         opacity: 0;
         transition: opacity 0.2s ease, visibility 0.2s ease;
-        max-width: 250px;
-        max-height: 180px;
+        
+        /* Tăng kích thước hình ảnh lên 50% (Rộng tối đa 375px, Cao tối đa 270px) */
+        max-width: 375px;
+        max-height: 270px;
+        width: auto;
         height: auto;
     }
     .tooltip-container:hover .tooltip-image {
@@ -77,27 +95,29 @@ G_SHEET_ACCOUNTS_URL = st.secrets.get(
     "the_gg_accounts_tab.csv"
 )
 
-# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Direct Image Link) trên CDN lh3 bảo mật
-def convert_google_drive_link(link):
-    if pd.isna(link) or not isinstance(link, str):
+# Hàm tự động quét và sinh Base64 cho ảnh lưu cục bộ trong thư mục 'images/' trên GitHub (Phương án 1 bảo mật tối đa)
+def get_local_image_base64(portal, game_name):
+    parts = str(game_name).strip().split(" ", 1)
+    if not (len(parts) == 2 and parts[0].isdigit()):
         return ""
-    link = link.strip()
     
-    # Pattern 1: https://drive.google.com/file/d/FILE_ID/view?usp=sharing hoặc tương tự
-    match_file = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', link)
-    if match_file:
-        file_id = match_file.group(1)
-        return f"https://lh3.googleusercontent.com/d/{file_id}"
-        
-    # Pattern 2: https://drive.google.com/open?id=FILE_ID
-    match_open = re.search(r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)', link)
-    if match_open:
-        file_id = match_open.group(1)
-        return f"https://lh3.googleusercontent.com/d/{file_id}"
-        
-    return link
+    game_code = parts[0]
+    # Hỗ trợ cả 2 định dạng phân tách gạch dưới _ và gạch ngang -
+    for sep in ["_", "-"]:
+        for ext in ["png", "jpg", "jpeg", "webp", "gif"]:
+            local_path = f"images/{portal}{sep}{game_code}.{ext}"
+            if os.path.exists(local_path):
+                try:
+                    with open(local_path, "rb") as f:
+                        data = f.read()
+                    encoded = base64.b64encode(data).decode()
+                    mime_type = f"image/{ext}" if ext != "jpg" else "image/jpeg"
+                    return f"data:{mime_type};base64,{encoded}"
+                except Exception:
+                    pass
+    return ""
 
-# 3. Hàm tải dữ liệu Tab Games
+# 3. Hàm tải dữ liệu Tab Games (Loại bỏ hoàn toàn sự phụ thuộc vào cột Image trên Sheet)
 @st.cache_data(ttl=120)
 def load_games_data(url_or_path):
     try:
@@ -109,18 +129,7 @@ def load_games_data(url_or_path):
         df['Link'] = df['Link'].ffill()
         df['Minigame nhà'] = df['Minigame nhà'].ffill()
         df['Thể loại'] = df.groupby('Portal')['Thể loại'].ffill()
-        
-        # SỬA LỖI TRÙNG LẶP HOVER ẢNH:
-        # Nếu cột Image chưa tồn tại, tự động tạo cột trống
-        if 'Image' not in df.columns:
-            df['Image'] = ""
-            
-        # KHÔNG sử dụng ffill() đối với cột Image vì hình ảnh thuộc về từng Game riêng lẻ, không gộp chung theo Portal
-        df['Image'] = df['Image'].fillna("")
         df['Game'] = df['Game'].fillna("Không rõ tên")
-        
-        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp
-        df['Image'] = df['Image'].apply(convert_google_drive_link)
         
         return df
     except Exception as e:
@@ -166,7 +175,7 @@ if df_games is not None:
         index=0
     )
     
-    # Bộ lọc tìm kiếm nhanh game (TOÀN CỤC)
+    # Bộ lọc tìm kiếm nhanh game
     st.sidebar.write("---")
     st.sidebar.subheader("Tìm kiếm Game")
     search_query = st.sidebar.text_input("Nhập tên hoặc mã game", "").strip()
@@ -182,10 +191,7 @@ if df_games is not None:
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
     st.sidebar.markdown(
-        "<div style='text-align: center; color: #888888; font-size: 11px;'>"
-        "© 2026 The GG App<br>"
-        "Developed by <b>Nobita</b>"
-        "</div>", 
+        "<div style='text-align: center; color: #888888; font-size: 11px;'>""© 2026 The GG App<br>""Developed by <b>Nobita</b>""</div>", 
         unsafe_allow_html=True
     )
 
@@ -216,7 +222,7 @@ if df_games is not None:
                 
                 for idx, row in group.iterrows():
                     parts = row['Game'].strip().split(" ", 1)
-                    img_url = row['Image'] if pd.notna(row['Image']) and str(row['Image']).strip() else ""
+                    img_url = get_local_image_base64(row['Portal'], row['Game'])
                     
                     # Xác định chuỗi tên hiển thị
                     if len(parts) == 2 and parts[0].isdigit():
@@ -224,7 +230,7 @@ if df_games is not None:
                     else:
                         game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
                         
-                    # Dựng thẻ HTML hover hình ảnh
+                    # Dựng thẻ HTML hover hình ảnh (Rút gọn)
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
@@ -273,14 +279,14 @@ if df_games is not None:
                 for idx, row in cat_data.iterrows():
                     game_name = row['Game']
                     parts = game_name.strip().split(" ", 1)
-                    img_url = row['Image'] if pd.notna(row['Image']) and str(row['Image']).strip() else ""
+                    img_url = get_local_image_base64(row['Portal'], row['Game'])
                     
                     if len(parts) == 2 and parts[0].isdigit():
                         game_text = f"<span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
                     else:
                         game_text = game_name
                         
-                    # Dựng thẻ HTML hover hình ảnh
+                    # Dựng thẻ HTML hover hình ảnh (Rút gọn)
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
@@ -329,10 +335,7 @@ if df_games is not None:
     # Phần copyright ở chân trang chính
     st.markdown("---")
     st.markdown(
-        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>"
-        "© 2026 The GG. All rights reserved. <br>"
-        "Developed by <b>Nobita</b>"
-        "</div>", 
+        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>""© 2026 The GG. All rights reserved. <br>""Developed by <b>Nobita</b>""</div>", 
         unsafe_allow_html=True
     )
 else:
