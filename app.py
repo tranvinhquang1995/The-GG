@@ -80,7 +80,7 @@ G_SHEET_ACCOUNTS_URL = st.secrets.get(
     "the_gg_accounts_tab.csv"
 )
 
-# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Dùng máy chủ lh3 để tránh lỗi Broken Image)
+# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Direct Image Link) trên CDN lh3 bảo mật
 def convert_google_drive_link(link):
     if pd.isna(link) or not isinstance(link, str):
         return ""
@@ -98,35 +98,31 @@ def convert_google_drive_link(link):
         file_id = match_open.group(1)
         return f"https://lh3.googleusercontent.com/d/{file_id}"
         
-    # Pattern 3: https://drive.google.com/uc?export=view&id=FILE_ID hoặc tương tự
-    match_uc = re.search(r'id=([a-zA-Z0-9_-]+)', link)
-    if "drive.google.com" in link and match_uc:
-        file_id = match_uc.group(1)
-        return f"https://lh3.googleusercontent.com/d/{file_id}"
-        
     return link
 
-# 3. Hàm tải dữ liệu Tab Games (Xử lý gộp dòng ffill và làm sạch cột Image)
+# 3. Hàm tải dữ liệu Tab Games
 @st.cache_data(ttl=120)
 def load_games_data(url_or_path):
     try:
         df = pd.read_csv(url_or_path, dtype={'Portal': str})
         df['Portal'] = df['Portal'].astype(str).str.strip()
         
-        # Tự động điền các ô trống do gộp dòng (ffill)
+        # Tự động điền các ô trống do gộp dòng (ffill) cho các trường thông tin chung của Portal
         df['Portal'] = df['Portal'].ffill()
         df['Link'] = df['Link'].ffill()
         df['Minigame nhà'] = df['Minigame nhà'].ffill()
         df['Thể loại'] = df.groupby('Portal')['Thể loại'].ffill()
         
+        # SỬA LỖI TRÙNG LẶP HOVER ẢNH:
         # Nếu cột Image chưa tồn tại, tự động tạo cột trống
         if 'Image' not in df.columns:
             df['Image'] = ""
             
-        df['Image'] = df['Image'].ffill()
+        # KHÔNG sử dụng ffill() đối với cột Image vì hình ảnh thuộc về từng Game riêng lẻ, không gộp chung theo Portal
+        df['Image'] = df['Image'].fillna("")
         df['Game'] = df['Game'].fillna("Không rõ tên")
         
-        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp qua server lh3 bảo mật
+        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp
         df['Image'] = df['Image'].apply(convert_google_drive_link)
         
         return df
@@ -199,7 +195,7 @@ if df_games is not None:
     # --- KHU VỰC TRANG CHÍNH ---
     # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
     if search_query:
-        st.markdown(f"<div class='main-title'>Kết quả tìm kiếm toàn cục: \"{search_query}\"</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='main-title'>Kết quả tìm kiếm: \"{search_query}\"</div>", unsafe_allow_html=True)
         st.write("---")
         
         filtered_games = df_games[df_games['Game'].str.contains(search_query, case=False, na=False)]
@@ -231,7 +227,7 @@ if df_games is not None:
                     else:
                         game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
                         
-                    # Dựng thẻ HTML hover hình ảnh (Đã lược bỏ nhãn 'Hover xem ảnh' thừa thãi)
+                    # Dựng thẻ HTML hover hình ảnh
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
@@ -287,7 +283,7 @@ if df_games is not None:
                     else:
                         game_text = game_name
                         
-                    # Dựng thẻ HTML hover hình ảnh (Đã lược bỏ hoàn toàn nhãn 'Hover xem ảnh' thừa thãi)
+                    # Dựng thẻ HTML hover hình ảnh
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
