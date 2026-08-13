@@ -32,17 +32,52 @@ st.markdown("""
         border-radius: 5px;
         border: 1px solid #30363D;
         margin-bottom: 6px;
+        transition: border-color 0.3s ease;
+    }
+    .game-card:hover {
+        border-color: #FF4B4B;
     }
     .account-row {
         padding: 8px 0;
         border-bottom: 1px solid #222;
         align-items: center;
     }
+    
+    /* TOOLTIP HOVER SHOW IMAGE CSS */
+    .tooltip-container {
+        position: relative;
+        display: block;
+        width: 100%;
+    }
+    .tooltip-container .tooltip-image {
+        visibility: hidden;
+        position: absolute;
+        z-index: 99999;
+        border: 3px solid #FF4B4B;
+        border-radius: 8px;
+        background-color: #1E1E24;
+        padding: 5px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+        
+        /* Position to the right of the game card with some padding */
+        top: 50%;
+        left: 102%;
+        transform: translateY(-50%);
+        
+        opacity: 0;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        max-width: 250px;
+        max-height: 180px;
+        height: auto;
+    }
+    .tooltip-container:hover .tooltip-image {
+        visibility: visible;
+        opacity: 1;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # 2. Cấu hình URL xuất CSV từ 2 Tabs mới của bạn
-# Mặc định sử dụng file CSV sạch đã tạo, người dùng sẽ cấu hình Streamlit Secrets để trỏ tới link Google Sheet thật
 G_SHEET_GAMES_URL = st.secrets.get(
     "g_sheet_games_url", 
     "the_gg_games_tab.csv" # Mặc định chạy local bằng file CSV đi kèm
@@ -56,7 +91,6 @@ G_SHEET_ACCOUNTS_URL = st.secrets.get(
 @st.cache_data(ttl=120)  # Bộ nhớ đệm 2 phút để tự động cập nhật khi bạn sửa Sheet
 def load_games_data(url_or_path):
     try:
-        # Đọc dữ liệu, ép kiểu Portal thành str để giữ nguyên các mã như 098, 055
         df = pd.read_csv(url_or_path, dtype={'Portal': str})
         
         # Làm sạch cột Portal
@@ -68,6 +102,12 @@ def load_games_data(url_or_path):
         df['Minigame nhà'] = df['Minigame nhà'].ffill()
         df['Thể loại'] = df.groupby('Portal')['Thể loại'].ffill()
         
+        # Tải cột Image nếu có, không sử dụng ffill cho Image vì mỗi game có hình ảnh riêng biệt
+        if 'Image' in df.columns:
+            df['Image'] = df['Image'].fillna("").astype(str).str.strip()
+        else:
+            df['Image'] = ""
+            
         df['Game'] = df['Game'].fillna("Không rõ tên")
         return df
     except Exception as e:
@@ -84,7 +124,6 @@ def load_accounts_data(url_or_path):
         df['Password'] = df['Password'].astype(str).str.strip()
         return df
     except Exception as e:
-        # Nếu chưa cấu hình hoặc cấu hình lỗi, trả về DataFrame trống để không lỗi app
         return pd.DataFrame(columns=['Portal', 'Username', 'Password'])
 
 # Tải dữ liệu vào ứng dụng
@@ -96,7 +135,7 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # HIỂN THỊ 2 BUTTON TRÊN 2 DÒNG RIÊNG BIỆT ĐỂ KHÔNG BỊ TRÀN CHỮ VÀ CÂN ĐỐI
+    # Hiển thị mỗi button trên 1 dòng riêng biệt để tránh tràn chữ và cân đối tuyệt đối
     if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -169,10 +208,24 @@ if df_games is not None:
                 # Liệt kê các game thỏa mãn điều kiện thuộc Portal này
                 for idx, row in group.iterrows():
                     parts = row['Game'].strip().split(" ", 1)
+                    image_url = str(row.get('Image', '')).strip() if 'Image' in row else ''
+                    has_image = pd.notna(row.get('Image')) and image_url.lower().startswith(('http://', 'https://'))
+                    
                     if len(parts) == 2 and parts[0].isdigit():
-                        game_html = f"<div class='game-card'>📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}</div>"
+                        game_text = f"📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
                     else:
-                        game_html = f"<div class='game-card'>📂 <b>{row['Thể loại']}</b> | {row['Game']}</div>"
+                        game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
+                        
+                    # Hiển thị kèm Tooltip hover ảnh nếu có link ảnh hợp lệ
+                    if has_image:
+                        game_html = f"""
+                        <div class="tooltip-container">
+                            <div class="game-card">{game_text}</div>
+                            <img class="tooltip-image" src="{image_url}" alt="{row['Game']}" />
+                        </div>
+                        """
+                    else:
+                        game_html = f"<div class='game-card'>{game_text}</div>"
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
         st.write("---")
@@ -208,15 +261,30 @@ if df_games is not None:
             
             for category in categories:
                 st.markdown(f"##### 📂 {category}")
-                cat_games = portal_games[portal_games['Thể loại'] == category]['Game'].tolist()
+                cat_games_df = portal_games[portal_games['Thể loại'] == category]
                 
-                for game in cat_games:
+                for idx, row in cat_games_df.iterrows():
+                    game = row['Game']
+                    image_url = str(row.get('Image', '')).strip() if 'Image' in row else ''
+                    has_image = pd.notna(row.get('Image')) and image_url.lower().startswith(('http://', 'https://'))
+                    
                     parts = game.strip().split(" ", 1)
                     # Đổi màu mã số game cho nổi bật và dễ nhìn
                     if len(parts) == 2 and parts[0].isdigit():
-                        game_html = f"<div class='game-card'><span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}</div>"
+                        game_text = f"<span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
                     else:
-                        game_html = f"<div class='game-card'>{game}</div>"
+                        game_text = game
+                        
+                    # Hiển thị kèm Tooltip hover ảnh nếu có link ảnh hợp lệ
+                    if has_image:
+                        game_html = f"""
+                        <div class="tooltip-container">
+                            <div class="game-card">{game_text}</div>
+                            <img class="tooltip-image" src="{image_url}" alt="{game}" />
+                        </div>
+                        """
+                    else:
+                        game_html = f"<div class='game-card'>{game_text}</div>"
                     st.markdown(game_html, unsafe_allow_html=True)
                 st.write("")
                 
