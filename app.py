@@ -80,7 +80,7 @@ G_SHEET_ACCOUNTS_URL = st.secrets.get(
     "the_gg_accounts_tab.csv"
 )
 
-# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Direct Image Link)
+# Hàm tự động chuyển đổi link chia sẻ Google Drive thành link xem ảnh trực tiếp (Dùng máy chủ lh3 để tránh lỗi Broken Image)
 def convert_google_drive_link(link):
     if pd.isna(link) or not isinstance(link, str):
         return ""
@@ -90,13 +90,19 @@ def convert_google_drive_link(link):
     match_file = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', link)
     if match_file:
         file_id = match_file.group(1)
-        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        return f"https://lh3.googleusercontent.com/d/{file_id}"
         
     # Pattern 2: https://drive.google.com/open?id=FILE_ID
     match_open = re.search(r'drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)', link)
     if match_open:
         file_id = match_open.group(1)
-        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        return f"https://lh3.googleusercontent.com/d/{file_id}"
+        
+    # Pattern 3: https://drive.google.com/uc?export=view&id=FILE_ID hoặc tương tự
+    match_uc = re.search(r'id=([a-zA-Z0-9_-]+)', link)
+    if "drive.google.com" in link and match_uc:
+        file_id = match_uc.group(1)
+        return f"https://lh3.googleusercontent.com/d/{file_id}"
         
     return link
 
@@ -120,7 +126,7 @@ def load_games_data(url_or_path):
         df['Image'] = df['Image'].ffill()
         df['Game'] = df['Game'].fillna("Không rõ tên")
         
-        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp
+        # Tự động chuyển hóa toàn bộ link Google Drive trong cột Image sang link trực tiếp qua server lh3 bảo mật
         df['Image'] = df['Image'].apply(convert_google_drive_link)
         
         return df
@@ -225,13 +231,12 @@ if df_games is not None:
                     else:
                         game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
                         
-                    # Dựng thẻ HTML hover hình ảnh
+                    # Dựng thẻ HTML hover hình ảnh (Đã lược bỏ nhãn 'Hover xem ảnh' thừa thãi)
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
                             <div class='game-card'>
                                 <span>{game_text}</span>
-                                <span style='font-size: 11px; color: #888;'>🖼️ Hover xem ảnh</span>
                             </div>
                             <img class='tooltip-image' src='{img_url}' alt='{row["Game"]}'>
                         </div>
@@ -282,13 +287,12 @@ if df_games is not None:
                     else:
                         game_text = game_name
                         
-                    # Dựng thẻ HTML hover hình ảnh
+                    # Dựng thẻ HTML hover hình ảnh (Đã lược bỏ hoàn toàn nhãn 'Hover xem ảnh' thừa thãi)
                     if img_url:
                         game_html = f"""
                         <div class='tooltip-container'>
                             <div class='game-card'>
                                 <span>{game_text}</span>
-                                <span style='font-size: 11px; color: #888;'>🖼️ Hover xem ảnh</span>
                             </div>
                             <img class='tooltip-image' src='{img_url}' alt='{game_name}'>
                         </div>
