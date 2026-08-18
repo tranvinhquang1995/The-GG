@@ -162,7 +162,7 @@ if df_games is not None:
         st.cache_data.clear()
         st.rerun()
         
-    st.sidebar.link_button("📎 Attachment Center", "#", use_container_width=True)
+    st.sidebar.link_button("📎 Attachment Center (Test)", "https://attachment-center.streamlit.app/", use_container_width=True)
 
     # Danh sách các Portal duy nhất
     portals = sorted(df_games['Portal'].unique())
