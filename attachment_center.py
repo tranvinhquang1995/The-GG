@@ -241,8 +241,8 @@ def show_attachment_center():
         col1, col2 = st.columns(2)
         
         with col1:
+            st.caption("Giảm dung lượng file xuống dưới 10MB để gửi Discord.")
             if st.button("⚡ Compress (Nén file)", type="primary"):
-                st.caption("Giảm dung lượng file xuống dưới 10MB để gửi Discord.")
                 if file_size_mb <= 10.0:
                     st.success("✅ File gốc đã dưới 10MB! Sẵn sàng tải về hoặc upload thẳng lên Drive.")
                     st.session_state.processed_file = file_bytes
