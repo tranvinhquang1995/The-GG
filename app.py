@@ -4,13 +4,9 @@ import re
 import os
 import base64
 
-# Import module màn hình Attachment Center từ file riêng biệt (.py)
-try:
-    from attachment_center import show_attachment_center
-except ImportError:
-    # Hàm dự phòng nếu người dùng quên chưa upload file attachment_center.py lên GitHub
-    def show_attachment_center():
-        st.warning("⚠️ Không tìm thấy file `attachment_center.py` trên GitHub của bạn. Vui lòng tải lên cả hai file `app.py` và `attachment_center.py` cùng lúc.")
+# Initialize session state for app mode
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "🎮 Quản lý Cổng Game"
 
 # 1. Cấu hình giao diện Streamlit
 st.set_page_config(
@@ -165,22 +161,18 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # Khởi tạo trạng thái màn hình (screen) nếu chưa có
-    if 'screen' not in st.session_state:
-        st.session_state['screen'] = 'database'
-        
-    # HIỂN THỊ NÚT BẤM ĐIỀU HƯỚNG SÁT NHAU
-    if st.session_state['screen'] == 'database':
-        # Nút làm mới dữ liệu
+    # 🧭 QUẢN LÝ HIỂN THỊ SIDEBAR DỰA TRÊN CHẾ ĐỘ MÀN HÌNH (st.session_state.app_mode)
+    if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
+        # Nút bấm làm mới dữ liệu thủ công
         if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
             
-        # Nút chuyển trang Attachment Center
+        # Nút bấm chuyển trang sang Attachment Center (Mỗi nút 1 dòng cân đối)
         if st.sidebar.button("📎 Attachment Center", use_container_width=True):
-            st.session_state['screen'] = 'attachment_center'
+            st.session_state.app_mode = "📎 Attachment Center"
             st.rerun()
-            
+
         # Danh sách các Portal duy nhất
         portals = sorted(df_games['Portal'].unique())
         
@@ -205,15 +197,14 @@ if df_games is not None:
         if df_accounts is not None and not df_accounts.empty:
             st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
             
-    else:
-        # Khi đang ở màn hình Attachment Center
+    elif st.session_state.app_mode == "📎 Attachment Center":
+        # Nút bấm chuyển quay trở lại trang chủ
         if st.sidebar.button("🎮 Quản lý Cổng Game", use_container_width=True):
-            st.session_state['screen'] = 'database'
+            st.session_state.app_mode = "🎮 Quản lý Cổng Game"
             st.rerun()
             
-        # Nút Attachment Center ở trạng thái disabled để báo hiệu trang hiện tại
-        st.sidebar.button("📎 Attachment Center (Đang xem)", use_container_width=True, disabled=True)
-
+        st.sidebar.info("💡 Bạn đang ở trang nén và tải tài liệu trực tiếp lên Google Drive.")
+        
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
     st.sidebar.markdown(
@@ -221,8 +212,8 @@ if df_games is not None:
         unsafe_allow_html=True
     )
 
-    # --- KHU VỰC TRANG CHÍNH ---
-    if st.session_state['screen'] == 'database':
+    # ================= MÀN HÌNH CHÍNH =================
+    if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
         # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
         if search_query:
             st.markdown(f"<div class='main-title'>Kết quả tìm kiếm: \"{search_query}\"</div>", unsafe_allow_html=True)
@@ -257,7 +248,7 @@ if df_games is not None:
                         else:
                             game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
                             
-                        # Dựng thẻ HTML hover hình ảnh (Rút gọn)
+                        # Dựng thẻ HTML hover hình ảnh
                         if img_url:
                             game_html = f"""
                             <div class='tooltip-container'>
@@ -313,7 +304,7 @@ if df_games is not None:
                         else:
                             game_text = game_name
                             
-                        # Dựng thẻ HTML hover hình ảnh (Rút gọn)
+                        # Dựng thẻ HTML hover hình ảnh
                         if img_url:
                             game_html = f"""
                             <div class='tooltip-container'>
@@ -348,7 +339,7 @@ if df_games is not None:
                     
                 st.write("---")
                 
-                # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (TẠM THỜI ẨN CỘT PASSWORD)
+                # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (PASSWORD ĐƯỢC ẨN)
                 st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
                 
                 if df_accounts is not None and not df_accounts.empty:
@@ -363,18 +354,19 @@ if df_games is not None:
                         st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
                 else:
                     st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
-                    
-    else:
-        # Gọi hàm hiển thị của Attachment Center từ file riêng biệt
-        show_attachment_center()
-                
+
+    elif st.session_state.app_mode == "📎 Attachment Center":
+        # Nạp và hiển thị module Attachment Center tách biệt
+        try:
+            from attachment_center import show_attachment_center
+            show_attachment_center()
+        except ImportError:
+            st.error("⚠️ Lỗi hệ thống: Không tìm thấy module `attachment_center.py` trên GitHub của bạn. Vui lòng kiểm tra lại!")
+
     # Phần copyright ở chân trang chính
     st.markdown("---")
     st.markdown(
-        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>"
-        "© 2026 The GG. All rights reserved. <br>"
-        "Developed by <b>Nobita</b>"
-        "</div>", 
+        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>© 2026 The GG. All rights reserved. <br>Developed by <b>Nobita</b></div>", 
         unsafe_allow_html=True
     )
 else:
