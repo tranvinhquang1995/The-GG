@@ -241,7 +241,7 @@ def show_attachment_center():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("Giảm dung lượng file xuống dưới 10MB để gửi Discord.")
+            st.caption("🚀 Giảm dung lượng file xuống dưới 10MB để gửi Discord.")
             if st.button("⚡ Compress (Nén file)", type="primary"):
                 if file_size_mb <= 10.0:
                     st.success("✅ File gốc đã dưới 10MB! Sẵn sàng tải về hoặc upload thẳng lên Drive.")
@@ -285,7 +285,7 @@ def show_attachment_center():
                 
         with col2:
             # Nút Upload Google Drive
-            st.markdown("⏳ *Dev đang lỏ! Vui lòng chờ build sau*")
+            st.caption("⏳ *Dev đang lỏ! Vui lòng chờ build sau*")
             upload_disabled = not GDRIVE_ENABLED
             upload_label = "☁️ Upload Google Drive"
             if upload_disabled:
