@@ -203,7 +203,7 @@ def show_attachment_center():
     )
     
     st.title("📁 Attachment Center (v5)")
-    st.markdown("Công cụ tối ưu hóa kích thước hình ảnh/video dành cho Tester (Đã khóa giao diện tối).")
+    st.markdown("Tool tối ưu dung lượng attachment để gửi Discord hoặc upload trực tiếp lên Google Drive.")
     st.markdown("---")
     
     # Khởi tạo service chỉ khi GDRIVE_ENABLED bật
