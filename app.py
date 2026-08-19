@@ -3,10 +3,15 @@ import pandas as pd
 import re
 import os
 import base64
+import sys
 
-# Initialize session state for app mode
-if "app_mode" not in st.session_state:
-    st.session_state.app_mode = "🎮 Quản lý Cổng Game"
+# ==============================================================================
+# ĐẢM BẢO ĐƯỜNG DẪN IMPORT HOẠT ĐỘNG HOÀN HẢO TRÊN STREAMLIT CLOUD
+# ==============================================================================
+# Thêm thư mục chứa file chạy hiện tại vào sys.path để Python luôn tìm thấy module attachment_center.py
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 # 1. Cấu hình giao diện Streamlit
 st.set_page_config(
@@ -89,6 +94,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Khởi tạo trạng thái màn hình (Mặc định là Quản lý cổng game)
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "🎮 Quản lý Cổng Game"
+
 # 2. Cấu hình URL xuất CSV từ 2 Tabs mới của bạn
 G_SHEET_GAMES_URL = st.secrets.get(
     "g_sheet_games_url", 
@@ -161,22 +170,28 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # 🧭 QUẢN LÝ HIỂN THỊ SIDEBAR DỰA TRÊN CHẾ ĐỘ MÀN HÌNH (st.session_state.app_mode)
+    # 🧭 BỘ ĐIỀU HƯỚNG MÀN HÌNH CHÍNH (Tích hợp nút chuyển đổi động thông minh)
+    if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
+        if st.sidebar.button("📎 Attachment Center", use_container_width=True):
+            st.session_state.app_mode = "📎 Attachment Center"
+            st.rerun()
+    else:
+        if st.sidebar.button("🎮 Quản lý Cổng Game", use_container_width=True):
+            st.session_state.app_mode = "🎮 Quản lý Cổng Game"
+            st.rerun()
+            
+    st.sidebar.write("---")
+    
+    # Hiển thị các nút cấu hình tùy thuộc vào màn hình được chọn
     if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
         # Nút bấm làm mới dữ liệu thủ công
         if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
-            
-        # Nút bấm chuyển trang sang Attachment Center (Mỗi nút 1 dòng cân đối)
-        if st.sidebar.button("📎 Attachment Center", use_container_width=True):
-            st.session_state.app_mode = "📎 Attachment Center"
-            st.rerun()
 
         # Danh sách các Portal duy nhất
         portals = sorted(df_games['Portal'].unique())
         
-        st.sidebar.write("---")
         st.sidebar.subheader("📍 Chọn Cổng Game")
         selected_portal = st.sidebar.selectbox(
             "Lọc theo mã Portal:",
@@ -198,13 +213,8 @@ if df_games is not None:
             st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
             
     elif st.session_state.app_mode == "📎 Attachment Center":
-        # Nút bấm chuyển quay trở lại trang chủ
-        if st.sidebar.button("🎮 Quản lý Cổng Game", use_container_width=True):
-            st.session_state.app_mode = "🎮 Quản lý Cổng Game"
-            st.rerun()
-            
         st.sidebar.info("💡 Bạn đang ở trang nén và tải tài liệu trực tiếp lên Google Drive.")
-        
+
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
     st.sidebar.markdown(
@@ -212,7 +222,7 @@ if df_games is not None:
         unsafe_allow_html=True
     )
 
-    # ================= MÀN HÌNH CHÍNH =================
+    # ================= MÀN HÌNH 1: QUẢN LÝ CỔNG GAME =================
     if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
         # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
         if search_query:
@@ -339,7 +349,7 @@ if df_games is not None:
                     
                 st.write("---")
                 
-                # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (PASSWORD ĐƯỢC ẨN)
+                # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (TẠM THỜI ẨN CỘT PASSWORD)
                 st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
                 
                 if df_accounts is not None and not df_accounts.empty:
@@ -355,13 +365,18 @@ if df_games is not None:
                 else:
                     st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
 
+    # ================= MÀN HÌNH 2: ATTACHMENT CENTER =================
     elif st.session_state.app_mode == "📎 Attachment Center":
-        # Nạp và hiển thị module Attachment Center tách biệt
+        # Nạp và hiển thị module Attachment Center từ file phụ tách biệt
         try:
-            from attachment_center import show_attachment_center
-            show_attachment_center()
-        except ImportError:
-            st.error("⚠️ Lỗi hệ thống: Không tìm thấy module `attachment_center.py` trên GitHub của bạn. Vui lòng kiểm tra lại!")
+            import attachment_center
+            # Buộc Python nạp lại module nếu có thay đổi trong runtime
+            import importlib
+            importlib.reload(attachment_center)
+            attachment_center.show_attachment_center()
+        except Exception as e:
+            st.error(f"⚠️ Lỗi hệ thống: Không thể nạp module `attachment_center.py` thành công.")
+            st.exception(e)
 
     # Phần copyright ở chân trang chính
     st.markdown("---")
