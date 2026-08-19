@@ -3,6 +3,16 @@ import pandas as pd
 import re
 import os
 import base64
+import sys
+
+# Đảm bảo Streamlit luôn tìm thấy các file module cục bộ bằng cách gán cứng đường dẫn root vào sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+# Khởi tạo session state cho chế độ màn hình
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "🎮 Quản lý Cổng Game"
 
 # 1. Cấu hình giao diện Streamlit
 st.set_page_config(
@@ -157,185 +167,212 @@ if df_games is not None:
     st.sidebar.markdown("<h2 style='text-align: center; color: #FF4B4B;'>🎮 THE GG APP</h2>", unsafe_allow_html=True)
     st.sidebar.write("---")
     
-    # Hiển thị mỗi button trên 1 dòng riêng biệt để tránh tràn chữ và cân đối
-    if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-        
-    st.sidebar.link_button("📎 Attachment Center (Test)", "https://attachment-center.streamlit.app/", use_container_width=True)
+    # 🧭 QUẢN LÝ HIỂN THỊ SIDEBAR DỰA TRÊN CHẾ ĐỘ MÀN HÌNH (st.session_state.app_mode)
+    if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
+        # Nút bấm làm mới dữ liệu thủ công
+        if st.sidebar.button("🔄 Làm mới dữ liệu", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+            
+        # Nút bấm chuyển trang sang Attachment Center (Mỗi nút 1 dòng cân đối)
+        if st.sidebar.button("📎 Attachment Center", use_container_width=True):
+            st.session_state.app_mode = "📎 Attachment Center"
+            st.rerun()
 
-    # Danh sách các Portal duy nhất
-    portals = sorted(df_games['Portal'].unique())
-    
-    st.sidebar.write("---")
-    st.sidebar.subheader("📍 Chọn Cổng Game")
-    selected_portal = st.sidebar.selectbox(
-        "Lọc theo mã Portal:",
-        options=portals,
-        index=0
-    )
-    
-    # Bộ lọc tìm kiếm nhanh game
-    st.sidebar.write("---")
-    st.sidebar.subheader("Tìm kiếm Game")
-    search_query = st.sidebar.text_input("Nhập tên hoặc mã game", "").strip()
-    
-    # Thống kê nhanh ở sidebar
-    st.sidebar.write("---")
-    st.sidebar.subheader("📊 Thống kê nhanh")
-    st.sidebar.write(f"- Tổng số Portal: `{len(portals)}`")
-    st.sidebar.write(f"- Tổng số đầu game: `{df_games['Game'].nunique()}`")
-    if df_accounts is not None and not df_accounts.empty:
-        st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
+        # Danh sách các Portal duy nhất
+        portals = sorted(df_games['Portal'].unique())
+        
+        st.sidebar.write("---")
+        st.sidebar.subheader("📍 Chọn Cổng Game")
+        selected_portal = st.sidebar.selectbox(
+            "Lọc theo mã Portal:",
+            options=portals,
+            index=0
+        )
+        
+        # Bộ lọc tìm kiếm nhanh game
+        st.sidebar.write("---")
+        st.sidebar.subheader("Tìm kiếm Game")
+        search_query = st.sidebar.text_input("Nhập tên hoặc mã game", "").strip()
+        
+        # Thống kê nhanh ở sidebar
+        st.sidebar.write("---")
+        st.sidebar.subheader("📊 Thống kê nhanh")
+        st.sidebar.write(f"- Tổng số Portal: `{len(portals)}`")
+        st.sidebar.write(f"- Tổng số đầu game: `{df_games['Game'].nunique()}`")
+        if df_accounts is not None and not df_accounts.empty:
+            st.sidebar.write(f"- Tổng số tài khoản test: `{len(df_accounts)}`")
+            
+    elif st.session_state.app_mode == "📎 Attachment Center":
+        # Nút bấm chuyển quay trở lại trang chủ
+        if st.sidebar.button("🎮 Quản lý Cổng Game", use_container_width=True):
+            st.session_state.app_mode = "🎮 Quản lý Cổng Game"
+            st.rerun()
+            
+        st.sidebar.info("💡 Click Upload Google Drive trước để upload file gốc.  \nClick Upload Google Drive sau khi nén để upload file đã nén.")
         
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
     st.sidebar.markdown(
-        "<div style='text-align: center; color: #888888; font-size: 11px;'>""© 2026 The GG App<br>""Developed by <b>Nobita</b>""</div>", 
+        "<div style='text-align: center; color: #888888; font-size: 11px;'>© 2026 The GG App<br>Developed by <b>Nobita</b></div>", 
         unsafe_allow_html=True
     )
 
-    # --- KHU VỰC TRANG CHÍNH ---
-    # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
-    if search_query:
-        st.markdown(f"<div class='main-title'>Kết quả tìm kiếm: \"{search_query}\"</div>", unsafe_allow_html=True)
-        st.write("---")
-        
-        filtered_games = df_games[df_games['Game'].str.contains(search_query, case=False, na=False)]
-        
-        if filtered_games.empty:
-            st.warning("❌ Không tìm thấy game nào khớp với từ khóa tìm kiếm trên toàn hệ thống.")
-        else:
-            st.success(f"🔍 Tìm thấy {len(filtered_games)} kết quả phù hợp từ các Portal:")
-            grouped_results = filtered_games.groupby('Portal')
+    # ================= MÀN HÌNH CHÍNH =================
+    if st.session_state.app_mode == "🎮 Quản lý Cổng Game":
+        # Áp dụng bộ lọc tìm kiếm TOÀN CỤC nếu có nhập từ khóa
+        if search_query:
+            st.markdown(f"<div class='main-title'>Kết quả tìm kiếm: \\\"{search_query}\\\"</div>", unsafe_allow_html=True)
+            st.write("---")
             
-            for portal_id, group in grouped_results:
-                st.markdown(f"#### 📍 Portal {portal_id}")
-                portal_link = group.iloc[0]['Link']
-                
-                link_str = str(portal_link).strip()
-                if ": " in link_str:
-                    label, url = link_str.split(": ", 1)
-                    st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
-                else:
-                    st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
-                
-                for idx, row in group.iterrows():
-                    parts = row['Game'].strip().split(" ", 1)
-                    img_url = get_local_image_base64(row['Portal'], row['Game'])
-                    
-                    # Xác định chuỗi tên hiển thị
-                    if len(parts) == 2 and parts[0].isdigit():
-                        game_text = f"📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
-                    else:
-                        game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
-                        
-                    # Dựng thẻ HTML hover hình ảnh (Rút gọn)
-                    if img_url:
-                        game_html = f"""
-                        <div class='tooltip-container'>
-                            <div class='game-card'>
-                                <span>{game_text}</span>
-                            </div>
-                            <img class='tooltip-image' src='{img_url}' alt='{row["Game"]}'>
-                        </div>
-                        """
-                    else:
-                        game_html = f"<div class='game-card'><span>{game_text}</span></div>"
-                        
-                    st.markdown(game_html, unsafe_allow_html=True)
-                st.write("")
-        st.write("---")
-        
-    else:
-        # Hiển thị chi tiết theo Portal được chọn (Mặc định)
-        portal_games = df_games[df_games['Portal'] == selected_portal]
-        first_row = portal_games.iloc[0]
-        portal_link = first_row['Link']
-        minigames_raw = first_row['Minigame nhà']
-        
-        st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
-        
-        link_str = str(portal_link).strip()
-        if ": " in link_str:
-            label, url = link_str.split(": ", 1)
-            st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
-        else:
-            st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
+            filtered_games = df_games[df_games['Game'].str.contains(search_query, case=False, na=False)]
             
-        st.write("---")
-        
-        col_left, col_right = st.columns([1, 1])
-        
-        # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME CÓ HOVER HÌNH ẢNH
-        with col_left:
-            st.subheader("🎮 Danh Sách Trò Chơi")
-            categories = portal_games['Thể loại'].unique()
-            
-            for category in categories:
-                st.markdown(f"##### 📂 {category}")
-                cat_data = portal_games[portal_games['Thể loại'] == category]
-                
-                for idx, row in cat_data.iterrows():
-                    game_name = row['Game']
-                    parts = game_name.strip().split(" ", 1)
-                    img_url = get_local_image_base64(row['Portal'], row['Game'])
-                    
-                    if len(parts) == 2 and parts[0].isdigit():
-                        game_text = f"<span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
-                    else:
-                        game_text = game_name
-                        
-                    # Dựng thẻ HTML hover hình ảnh (Rút gọn)
-                    if img_url:
-                        game_html = f"""
-                        <div class='tooltip-container'>
-                            <div class='game-card'>
-                                <span>{game_text}</span>
-                            </div>
-                            <img class='tooltip-image' src='{img_url}' alt='{game_name}'>
-                        </div>
-                        """
-                    else:
-                        game_html = f"<div class='game-card'><span>{game_text}</span></div>"
-                        
-                    st.markdown(game_html, unsafe_allow_html=True)
-                st.write("")
-                
-        # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
-        with col_right:
-            st.subheader("🃏 Minigame Nhà")
-            if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
-                st.info("Cổng này hiện **không có** Minigame nhà.")
+            if filtered_games.empty:
+                st.warning("❌ Không tìm thấy game nào khớp với từ khóa tìm kiếm trên toàn hệ thống.")
             else:
-                m_list = re.split(r'<br>|\n', str(minigames_raw))
-                minigame_html = "<div class='minigame-container'>"
-                for m in m_list:
-                    if m.strip():
-                        minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
-                minigame_html += "</div>"
-                st.markdown(minigame_html, unsafe_allow_html=True)
+                st.success(f"🔍 Tìm thấy {len(filtered_games)} kết quả phù hợp từ các Portal:")
+                grouped_results = filtered_games.groupby('Portal')
+                
+                for portal_id, group in grouped_results:
+                    st.markdown(f"#### 📍 Portal {portal_id}")
+                    portal_link = group.iloc[0]['Link']
+                    
+                    link_str = str(portal_link).strip()
+                    if ": " in link_str:
+                        label, url = link_str.split(": ", 1)
+                        st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
+                    else:
+                        st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
+                    
+                    for idx, row in group.iterrows():
+                        parts = row['Game'].strip().split(" ", 1)
+                        img_url = get_local_image_base64(row['Portal'], row['Game'])
+                        
+                        # Xác định chuỗi tên hiển thị
+                        if len(parts) == 2 and parts[0].isdigit():
+                            game_text = f"📂 <b>{row['Thể loại']}</b> | <span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
+                        else:
+                            game_text = f"📂 <b>{row['Thể loại']}</b> | {row['Game']}"
+                            
+                        # Dựng thẻ HTML hover hình ảnh
+                        if img_url:
+                            game_html = f"""
+                            <div class='tooltip-container'>
+                                <div class='game-card'>
+                                    <span>{game_text}</span>
+                                </div>
+                                <img class='tooltip-image' src='{img_url}' alt='{row["Game"]}'>
+                            </div>
+                            """
+                        else:
+                            game_html = f"<div class='game-card'><span>{game_text}</span></div>"
+                            
+                        st.markdown(game_html, unsafe_allow_html=True)
+                    st.write("")
+            st.write("---")
+            
+        else:
+            # Hiển thị chi tiết theo Portal được chọn (Mặc định)
+            portal_games = df_games[df_games['Portal'] == selected_portal]
+            first_row = portal_games.iloc[0]
+            portal_link = first_row['Link']
+            minigames_raw = first_row['Minigame nhà']
+            
+            st.markdown(f"<div class='main-title'>Portal {selected_portal}</div>", unsafe_allow_html=True)
+            
+            link_str = str(portal_link).strip()
+            if ": " in link_str:
+                label, url = link_str.split(": ", 1)
+                st.markdown(f"**🔗 Đường dẫn truy cập:** {label}: [{url}]({url})")
+            else:
+                st.markdown(f"**🔗 Đường dẫn truy cập:** [{link_str}]({link_str})")
                 
             st.write("---")
             
-            st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
-            if df_accounts is not None and not df_accounts.empty:
-                portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
+            col_left, col_right = st.columns([1, 1])
+            
+            # CỘT TRÁI: HIỂN THỊ DANH SÁCH GAME CÓ HOVER HÌNH ẢNH
+            with col_left:
+                st.subheader("🎮 Danh Sách Trò Chơi")
+                categories = portal_games['Thể loại'].unique()
                 
-                if len(portal_accs) > 0:
-                    st.markdown("**👤 Username**")
-                    for idx, row in portal_accs.reset_index(drop=True).iterrows():
-                        st.code(row['Username'], language="")
-                    st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
+                for category in categories:
+                    st.markdown(f"##### 📂 {category}")
+                    cat_data = portal_games[portal_games['Thể loại'] == category]
+                    
+                    for idx, row in cat_data.iterrows():
+                        game_name = row['Game']
+                        parts = game_name.strip().split(" ", 1)
+                        img_url = get_local_image_base64(row['Portal'], row['Game'])
+                        
+                        if len(parts) == 2 and parts[0].isdigit():
+                            game_text = f"<span style='color: #FF4B4B; font-weight: bold;'>{parts[0]}</span> | {parts[1]}"
+                        else:
+                            game_text = game_name
+                            
+                        # Dựng thẻ HTML hover hình ảnh
+                        if img_url:
+                            game_html = f"""
+                            <div class='tooltip-container'>
+                                <div class='game-card'>
+                                    <span>{game_text}</span>
+                                </div>
+                                <img class='tooltip-image' src='{img_url}' alt={game_name}>
+                            </div>
+                            """
+                        else:
+                            game_html = f"<div class='game-card'><span>{game_text}</span></div>"
+                            
+                        st.markdown(game_html, unsafe_allow_html=True)
+                    st.write("")
+                    
+            # CỘT PHẢI: MINIGAME NHÀ & TÀI KHOẢN KHÁCH HÀNG
+            with col_right:
+                # 1. Minigame nhà
+                st.subheader("🃏 Minigame Nhà")
+                if pd.isna(minigames_raw) or str(minigames_raw).strip().lower() in ["không có", "nan", ""]:
+                    st.info("Cổng này hiện **không có** Minigame nhà.")
                 else:
-                    st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
-            else:
-                st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
+                    # Tách các minigame nếu chúng cách nhau bằng thẻ <br> hoặc xuống dòng
+                    m_list = re.split(r'<br>|\n', str(minigames_raw))
+                    minigame_html = "<div class='minigame-container'>"
+                    for m in m_list:
+                        if m.strip():
+                            minigame_html += f"<div style='margin-bottom: 5px; color: #FFFFFF;'>🔹 <b>{m.strip()}</b></div>"
+                    minigame_html += "</div>"
+                    
+                    st.markdown(minigame_html, unsafe_allow_html=True)
+                    
+                st.write("---")
                 
+                # 2. Tài khoản nội bộ được lấy trực tiếp từ Tab Accounts sạch đẹp (PASSWORD ĐƯỢC ẨN)
+                st.subheader("🔑 Tài Khoản Test (Nội Bộ)")
+                
+                if df_accounts is not None and not df_accounts.empty:
+                    portal_accs = df_accounts[df_accounts['Portal'] == selected_portal]
+                    
+                    if len(portal_accs) > 0:
+                        st.markdown("**👤 Username**")
+                        for idx, row in portal_accs.reset_index(drop=True).iterrows():
+                            st.code(row['Username'], language="")
+                        st.caption("💡 Bạn có thể click vào biểu tượng sao chép ở góc phải của ô Username để copy nhanh.")
+                    else:
+                        st.warning("⚠️ Hiện chưa có tài khoản test nào được đăng ký cho cổng này.")
+                else:
+                    st.warning("⚠️ Chưa cấu hình hoặc không tìm thấy dữ liệu tài khoản từ Tab Accounts.")
+
+    elif st.session_state.app_mode == "📎 Attachment Center":
+        # Nạp và hiển thị module Attachment Center tách biệt
+        try:
+            from attachment_center import show_attachment_center
+            show_attachment_center()
+        except ImportError as e:
+            st.error(f"⚠️ Lỗi hệ thống: Không thể nạp module `attachment_center.py` thành công. Chi tiết lỗi: {e}")
+
     # Phần copyright ở chân trang chính
     st.markdown("---")
     st.markdown(
-        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>""© 2026 The GG. All rights reserved. <br>""Developed by <b>Nobita</b>""</div>", 
+        "<div style='text-align: center; color: #888888; font-size: 13px; margin-top: 20px;'>© 2026 The GG. All rights reserved. <br>Developed by <b>Nobita</b></div>", 
         unsafe_allow_html=True
     )
 else:
