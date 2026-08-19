@@ -242,6 +242,7 @@ def show_attachment_center():
         
         with col1:
             if st.button("⚡ Compress (Nén file)", type="primary"):
+                st.caption("Giảm dung lượng file xuống dưới 10MB để gửi Discord.")
                 if file_size_mb <= 10.0:
                     st.success("✅ File gốc đã dưới 10MB! Sẵn sàng tải về hoặc upload thẳng lên Drive.")
                     st.session_state.processed_file = file_bytes
@@ -288,6 +289,7 @@ def show_attachment_center():
             upload_label = "☁️ Upload Google Drive"
             if upload_disabled:
                 upload_label += " [In-process]"
+                st.caption("⏳ *Dev đang lỏ! Vui lòng chờ build sau*")
                 
             if st.button(upload_label, type="secondary", disabled=upload_disabled):
                 st.session_state.show_upload_form = True
