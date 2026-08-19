@@ -5,22 +5,32 @@ import re
 import tempfile
 import subprocess
 from PIL import Image
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
-# --- KHAI BÁO BẬT/TẮT TÍNH NĂNG GOOGLE DRIVE ---
-# Bạn có thể đổi giá trị này thành True khi đã sẵn sàng kích hoạt lại tính năng upload Google Drive
+# Thử nạp các thư viện của Google Drive. 
+# Nếu người dùng chưa cài đặt trong requirements.txt, cơ chế này giúp tránh làm sập ứng dụng khi GDRIVE_ENABLED = False.
+try:
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload
+    GDRIVE_IMPORTS_OK = True
+except ImportError:
+    GDRIVE_IMPORTS_OK = False
+
+### --- KHAI BÁO BẬT/TẮT TÍNH NĂNG GOOGLE DRIVE ---
+### BẠN CÓ THỂ ĐỔI GIÁ TRỊ NÀY THÀNH True KHI ĐÃ SẴN SÀNG KÍCH HOẠT LẠI TÍNH NĂNG UPLOAD GOOGLE DRIVE
 GDRIVE_ENABLED = False
 
-# --- HẰNG SỐ & ĐỊNH CẤU HÌNH ---
-# ID thư mục mẹ trên Google Drive (Mọi thư mục con như 109, 110 sẽ được tạo ở đây)
+### --- HẰNG SỐ & ĐỊNH CẤU HÌNH ---
+### ID thư mục mẹ trên Google Drive (Mọi thư mục con như 109, 110 sẽ được tạo ở đây)
 PARENT_FOLDER_ID = st.secrets.get("gdrive", {}).get("parent_folder_id", "YOUR_GOOGLE_DRIVE_PARENT_FOLDER_ID")
 
-# --- HÀM KHỞI TẠO GOOGLE DRIVE SERVICE ---
+### --- HÀM KHỞI TẠO GOOGLE DRIVE SERVICE ---
 @st.cache_resource
 def get_gdrive_service():
     """Khởi tạo Drive API Service sử dụng Google Service Account từ Secrets"""
+    if not GDRIVE_IMPORTS_OK:
+        st.error("❌ Không thể khởi chạy Google Drive API do thiếu thư viện. Vui lòng thêm `google-api-python-client` và `google-auth` vào file requirements.txt!")
+        return None
     try:
         gcp_info = st.secrets["gcp_service_account"]
         creds = service_account.Credentials.from_service_account_info(
@@ -32,7 +42,7 @@ def get_gdrive_service():
         st.error(f"❌ Không thể cấu hình Google Drive API. Vui lòng kiểm tra st.secrets. Lỗi: {e}")
         return None
 
-# --- CÁC HÀM XỬ LÝ GOOGLE DRIVE ---
+### --- CÁC HÀM XỬ LÝ GOOGLE DRIVE ---
 def find_or_create_folder(service, folder_name, parent_id):
     """Tìm thư mục con bằng tên dưới thư mục mẹ. Nếu chưa có thì tạo mới."""
     query = f"name = '{folder_name}' and '{parent_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
@@ -40,17 +50,17 @@ def find_or_create_folder(service, folder_name, parent_id):
         results = service.files().list(q=query, fields="files(id, name)").execute()
         items = results.get("files", [])
         if items:
-            return items[0]["id"]
+            return items[0]['id']
         else:
             file_metadata = {
-                "name": folder_name,
-                "mimeType": "application/vnd.google-apps.folder",
-                "parents": [parent_id]
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [parent_id]
             }
-            folder = service.files().create(body=file_metadata, fields="id").execute()
-            return folder.get("id")
+            folder = service.files().create(body=file_metadata, fields='id').execute()
+            return folder.get('id')
     except Exception as e:
-        st.error(f"❌ Lỗi tìm/tạo thư mục Drive: {e}")
+        st.error(f"❌ Lỗi khi tìm hoặc tạo thư mục: {e}")
         return None
 
 def upload_file_to_drive(service, file_bytes, filename, mime_type, folder_id):
@@ -68,52 +78,42 @@ def upload_file_to_drive(service, file_bytes, filename, mime_type, folder_id):
         ).execute()
         return file
     except Exception as e:
-        st.error(f"❌ Lỗi tải file lên Drive: {e}")
+        st.error(f"❌ Lỗi khi upload file lên Drive: {e}")
         return None
 
-# --- CÁC HÀM NÉN HÌNH ẢNH & VIDEO (Sử dụng Ổ Đĩa Tạm Thời để bảo vệ 1GB RAM) ---
+### --- CÁC HÀM NÉN HÌNH ẢNH & VIDEO (TỐI ƯU DISK-BASED TRÁNH SẬP RAM) ---
 def compress_image(image_bytes, file_ext, target_size_mb=10.0):
-    """Giảm chất lượng hình ảnh về dưới mức dung lượng mục tiêu (10MB) sử dụng Disk tạm thời để tiết kiệm RAM"""
+    """Giảm chất lượng hình ảnh về dưới mức dung lượng mục tiêu (10MB)"""
     target_size_bytes = target_size_mb * 1024 * 1024
     if len(image_bytes) <= target_size_bytes:
         return image_bytes, False
         
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_in = os.path.join(temp_dir, f"input.{file_ext}")
-        temp_out = os.path.join(temp_dir, f"output.jpg")
-        
-        with open(temp_in, "wb") as f:
-            f.write(image_bytes)
+    try:
+        # Ghi file tạm ra ổ đĩa thay vì xử lý hoàn toàn trên RAM để bảo vệ 1GB RAM của Streamlit
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = os.path.join(temp_dir, f"temp_input{file_ext}")
+            with open(input_path, "wb") as f:
+                f.write(image_bytes)
             
-        img = Image.open(temp_in)
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
+            img = Image.open(input_path)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
             
-        quality = 85
-        img.save(temp_out, format="JPEG", quality=quality)
-        
-        # Lặp giảm chất lượng ảnh
-        while os.path.getsize(temp_out) > target_size_bytes and quality > 15:
-            quality -= 10
-            img.save(temp_out, format="JPEG", quality=quality)
+            quality = 90
+            output_path = os.path.join(temp_dir, "temp_output.jpg")
+            img.save(output_path, "JPEG", quality=quality)
             
-        # Nếu vẫn quá lớn, thực hiện thay đổi độ phân giải (Resize)
-        scale = 0.9
-        while os.path.getsize(temp_out) > target_size_bytes and scale > 0.1:
-            w, h = img.size
-            new_size = (int(w * scale), int(h * scale))
-            resized_img = img.resize(new_size, Image.Resampling.LANCZOS)
-            resized_img.save(temp_out, format="JPEG", quality=quality)
-            scale -= 0.1
-            
-        with open(temp_out, "rb") as f:
-            compressed_bytes = f.read()
-            
-        # Kiểm tra xem chất lượng có bị giảm quá sâu (> 90% dung lượng gốc)
-        reduced_percent = (1 - (len(compressed_bytes) / len(image_bytes))) * 100
-        is_low_quality = quality <= 20 or scale <= 0.4 or reduced_percent > 90
-        
-        return compressed_bytes, is_low_quality
+            while os.path.getsize(output_path) > target_size_bytes and quality > 10:
+                quality -= 10
+                img.save(output_path, "JPEG", quality=quality)
+                
+            with open(output_path, "rb") as f:
+                compressed_bytes = f.read()
+                
+            return compressed_bytes, True
+    except Exception as e:
+        st.error(f"❌ Lỗi khi nén ảnh: {e}")
+        return image_bytes, False
 
 def get_video_duration(input_path):
     """Sử dụng ffprobe để lấy thời lượng video phục vụ tính toán bitrate"""
@@ -126,90 +126,97 @@ def get_video_duration(input_path):
     except Exception:
         return None
 
-def compress_video(video_bytes, file_ext, target_size_mb=10.0):
-    """Nén video về dưới 10MB bằng cách tự động tính toán bitrate và dùng ffmpeg trên ổ đĩa tạm"""
+def compress_video(video_bytes, target_size_mb=10.0):
+    """Nén video về dưới 10MB bằng cách tự động tính toán bitrate và dùng ffmpeg"""
     target_size_bytes = target_size_mb * 1024 * 1024
     if len(video_bytes) <= target_size_bytes:
         return video_bytes, False
         
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_in = os.path.join(temp_dir, f"input.{file_ext}")
-        temp_out = os.path.join(temp_dir, f"output.mp4")
-        
-        with open(temp_in, "wb") as f:
-            f.write(video_bytes)
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_path = os.path.join(temp_dir, "temp_input.mp4")
+            output_path = os.path.join(temp_dir, "temp_output.mp4")
             
-        duration = get_video_duration(temp_in)
-        if not duration:
-            return video_bytes, False
-            
-        # Tính toán bitrate mục tiêu (90% dung lượng tối đa để dự phòng sai số âm thanh)
-        target_size_bits = target_size_bytes * 8 * 0.9
-        target_bitrate = int(target_size_bits / duration)
-        
-        if target_bitrate < 100000:
-            target_bitrate = 100000
-            
-        # Sử dụng FFMPEG chuyển mã video
-        cmd = [
-            "ffmpeg", "-y", "-i", temp_in,
-            "-b:v", str(target_bitrate),
-            "-b:a", "128k",
-            "-preset", "veryfast",
-            temp_out
-        ]
-        
-        try:
-            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            with open(temp_out, "rb") as f:
-                compressed_bytes = f.read()
+            with open(input_path, "wb") as f:
+                f.write(video_bytes)
                 
-            reduced_percent = (1 - (len(compressed_bytes) / len(video_bytes))) * 100
-            is_low_quality = reduced_percent > 90
-            return compressed_bytes, is_low_quality
-        except Exception:
-            return video_bytes, False
+            duration = get_video_duration(input_path)
+            if not duration:
+                return video_bytes, False
+                
+            # Tính toán bitrate mục tiêu (trừ hao 15% cho audio và container overhead)
+            target_bitrate_kbps = int((target_size_bytes * 8) / (duration * 1000) * 0.85)
+            
+            # Chạy ffmpeg
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-b:v", f"{target_bitrate_kbps}k",
+                "-maxrate", f"{target_bitrate_kbps}k",
+                "-bufsize", f"{target_bitrate_kbps // 2}k",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-profile:v", "baseline", "-level", "3.0",
+                "-c:a", "aac", "-b:a", "128k",
+                output_path
+            ]
+            
+            subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                with open(output_path, "rb") as f:
+                    compressed_bytes = f.read()
+                return compressed_bytes, True
+            
+        return video_bytes, False
+    except Exception as e:
+        st.error(f"❌ Lỗi khi nén video: {e}")
+        return video_bytes, False
 
-# --- HÀM CHÍNH ĐỂ HIỂN THỊ MÀN HÌNH CHỨC NĂNG ---
+### --- HÀM CHÍNH SHOW GIAO DIỆN CHUYỂN TỪ APP CHÍNH ---
 def show_attachment_center():
-    st.markdown("<div class='main-title'>📎 Attachment Center</div>", unsafe_allow_html=True)
-    st.markdown("##### Công cụ tối ưu hóa kích thước hình ảnh/video dành cho Tester (Đã khóa giao diện tối).")
-    st.write("---")
-    
-    # CSS Khóa cứng giao diện tối và chân trang cố định
-    st.markdown("""
-    <style>
-        /* CSS Khóa giao diện tối */
+    # CSS Khóa cứng giao diện tối và căn chỉnh footer đúng bản sắc Nobita
+    st.markdown(
+        """
+        <style>
         #MainMenu {visibility: hidden;}
-        
-        .main-container-spacer {
-            height: 100px;
-        }
-        
         .nobita-footer {
             position: fixed;
             left: 0;
             bottom: 0;
             width: 100%;
             background-color: #0E1117;
-            border-top: 1px solid #30363D;
             color: #888888;
             text-align: center;
             padding: 10px 0;
-            font-size: 13px;
-            z-index: 999;
+            font-size: 12px;
+            border-top: 1px solid #30363D;
+            z-index: 9999;
         }
-    </style>
-    """, unsafe_allow_html=True)
+        .main-container-spacer {
+            height: 80px;
+        }
+        .stButton>button {
+            width: 100%;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     
-    # Khởi chạy Google Drive service nếu tính năng được bật
+    st.title("📁 Attachment Center (v5)")
+    st.markdown("Công cụ tối ưu hóa kích thước hình ảnh/video dành cho Tester (Đã khóa giao diện tối).")
+    st.markdown("---")
+    
+    # Khởi tạo service chỉ khi GDRIVE_ENABLED bật
     service = None
     if GDRIVE_ENABLED:
-        service = get_gdrive_service()
-        
+        if GDRIVE_IMPORTS_OK:
+            service = get_gdrive_service()
+        else:
+            st.error("❌ Không thể nạp thư viện Google Drive. Vui lòng thêm `google-api-python-client` và `google-auth` vào requirements.txt!")
+            
     st.subheader("📤 Upload Attachment & Lựa chọn chức năng")
     uploaded_file = st.file_uploader(
-        "Kéo thả hoặc chọn file hình ảnh/video của bạn", 
+        "Kéo thả hoặc chọn file hình ảnh/video của bạn",
         type=["png", "jpg", "jpeg", "mp4", "mov", "avi", "mkv"]
     )
     
@@ -218,120 +225,125 @@ def show_attachment_center():
         file_name = uploaded_file.name
         file_size_mb = len(file_bytes) / (1024 * 1024)
         mime_type = uploaded_file.type
-        file_ext = file_name.split(".")[-1].lower() if "." in file_name else "bin"
+        file_ext = os.path.splitext(file_name)[1].lower()
         
-        st.info(f"📁 Tên file: **{file_name}** | Dung lượng gốc: **{file_size_mb:.2f} MB**")
-        
-        # Khởi tạo trạng thái xử lý trong Session State
-        if "compressed_bytes" not in st.session_state:
-            st.session_state.compressed_bytes = None
+        # Khởi tạo session state để lưu trạng thái file đã xử lý
+        if "processed_file" not in st.session_state or st.session_state.get("original_name") != file_name:
+            st.session_state.processed_file = None
             st.session_state.is_compressed = False
-            st.session_state.low_quality_alert = False
-            st.session_state.upload_form_visible = False
-            st.session_state.current_file_id = None
+            st.session_state.original_name = file_name
+            st.session_state.compression_ratio = 0.0
+            st.session_state.show_upload_form = False
             
-        col_act1, col_act2 = st.columns(2)
+        # Hiển thị thông số file gốc
+        st.info(f"📁 **File đã chọn:** {file_name} | ⚖️ **Dung lượng:** {file_size_mb:.2f} MB")
         
-        with col_act1:
-            # 1. TÍNH NĂNG NÉN COMPRESS
-            if st.button("⚡ Compress (Nén tối ưu < 10MB)", type="primary", use_container_width=True):
-                with st.spinner("⏳ Đang tiến hành xử lý nén tối ưu file..."):
-                    if file_size_mb > 10.0:
-                        if file_ext in ["png", "jpg", "jpeg"]:
-                            comp_bytes, low_qual = compress_image(file_bytes, file_ext)
-                            st.session_state.compressed_bytes = comp_bytes
-                            st.session_state.is_compressed = True
-                            st.session_state.low_quality_alert = low_qual
-                        elif file_ext in ["mp4", "mov", "avi", "mkv"]:
-                            comp_bytes, low_qual = compress_video(file_bytes, file_ext)
-                            st.session_state.compressed_bytes = comp_bytes
-                            st.session_state.is_compressed = True
-                            st.session_state.low_quality_alert = low_qual
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("⚡ Compress (Nén file)", type="primary"):
+                if file_size_mb <= 10.0:
+                    st.success("✅ File gốc đã dưới 10MB! Sẵn sàng tải về hoặc upload thẳng lên Drive.")
+                    st.session_state.processed_file = file_bytes
+                    st.session_state.is_compressed = False
+                else:
+                    with st.spinner("🔄 Đang xử lý nén file dưới 10MB..."):
+                        if file_ext in [".png", ".jpg", ".jpeg"]:
+                            compressed_bytes, ok = compress_image(file_bytes, file_ext)
+                        elif file_ext in [".mp4", ".mov", ".avi", ".mkv"]:
+                            compressed_bytes, ok = compress_video(file_bytes)
                         else:
-                            st.warning("⚠️ Định dạng file chưa hỗ trợ nén tự động.")
-                            st.session_state.compressed_bytes = file_bytes
-                            st.session_state.is_compressed = False
-                            st.session_state.low_quality_alert = False
-                    else:
-                        st.success("✅ File gốc đã hợp lệ (dưới 10MB), sẵn sàng cho tải về mà không nén!")
-                        st.session_state.compressed_bytes = file_bytes
-                        st.session_state.is_compressed = False
-                        st.session_state.low_quality_alert = False
-                        
-            # Hiển thị nút tải xuống file nén nếu có
-            if st.session_state.compressed_bytes is not None:
-                comp_size_mb = len(st.session_state.compressed_bytes) / (1024 * 1024)
-                st.success(f"📊 Dung lượng file sau xử lý: **{comp_size_mb:.2f} MB**")
-                
-                if st.session_state.low_quality_alert:
-                    st.warning("⚠️ Cảnh báo: Chất lượng file bị giảm sâu (> 90%) để đạt dung lượng dưới 10MB!")
+                            compressed_bytes, ok = file_bytes, False
+                            
+                        if ok:
+                            final_size_mb = len(compressed_bytes) / (1024 * 1024)
+                            ratio = (1 - (len(compressed_bytes) / len(file_bytes))) * 100
+                            st.session_state.processed_file = compressed_bytes
+                            st.session_state.is_compressed = True
+                            st.session_state.compression_ratio = ratio
+                            
+                            st.success(f"🎉 Nén thành công! Dung lượng mới: **{final_size_mb:.2f} MB** (Giảm **{ratio:.1f}%**)")
+                            if ratio >= 90.0:
+                                st.warning("⚠️ Cảnh báo: Chất lượng file đã bị giảm sâu (>90%) để đạt mức dung lượng dưới 10MB.")
+                        else:
+                            st.error("❌ Không thể nén file về dưới 10MB. Vui lòng kiểm tra lại định dạng hoặc độ dài.")
+                            
+            # Nếu đã có file được xử lý, hiển thị nút tải về
+            if st.session_state.processed_file is not None:
+                out_filename = file_name
+                if st.session_state.is_compressed:
+                    name_part, ext_part = os.path.splitext(file_name)
+                    out_filename = f"{name_part}_compressed{ext_part}"
                     
                 st.download_button(
                     label="📥 Tải file tạm thời",
-                    data=st.session_state.compressed_bytes,
-                    file_name=f"compressed_{file_name}" if st.session_state.is_compressed else file_name,
-                    mime=mime_type,
-                    use_container_width=True
+                    data=st.session_state.processed_file,
+                    file_name=out_filename,
+                    mime=mime_type
                 )
                 
-        with col_act2:
-            # 2. TÍNH NĂNG TẢI LÊN GOOGLE DRIVE (Kiểm soát bởi flag)
-            if not GDRIVE_ENABLED:
-                st.button("☁️ Upload Google Drive [In-process]", disabled=True, use_container_width=True)
-                st.caption("🔒 *Nút Upload hiện đang tạm khóa. Bạn chỉ cần sửa GDRIVE_ENABLED = True trong code để mở lại.*")
-            else:
-                if st.button("☁️ Upload Google Drive", use_container_width=True):
-                    st.session_state.upload_form_visible = True
-                    
-        # Popup form hiển thị cấu hình chi tiết trước khi tải lên
-        if GDRIVE_ENABLED and st.session_state.upload_form_visible:
-            st.write("---")
-            st.subheader("⚙️ Cấu hình Tải lên Google Drive")
-            
-            # Tự động bóc tách tên file gốc (109-B109-47.mp4 -> thư mục 109 và tên B109-47.mp4)
-            match = re.match(r'^(\d+)[-_](.*)$', file_name)
-            if match:
-                suggested_folder = match.group(1)
-                suggested_name = match.group(2)
-            else:
-                suggested_folder = "Chung"
-                suggested_name = file_name
+        with col2:
+            # Nút Upload Google Drive
+            upload_disabled = not GDRIVE_ENABLED
+            upload_label = "☁️ Upload Google Drive"
+            if upload_disabled:
+                upload_label += " [In-process]"
                 
+            if st.button(upload_label, type="secondary", disabled=upload_disabled):
+                st.session_state.show_upload_form = True
+                
+        # Hiển thị Form cấu hình upload khi click vào Upload
+        if GDRIVE_ENABLED and st.session_state.get("show_upload_form", False):
+            st.markdown("---")
+            st.subheader("📝 Cấu hình thư mục & Tên file trên Drive")
+            
+            default_folder = "Chung"
+            default_save_name = file_name
+            
+            match = re.match(r"^([a-zA-Z0-9]+)[-_](.+)$", file_name)
+            if match:
+                default_folder = match.group(1)
+                default_save_name = match.group(2)
+            
+            if st.session_state.processed_file is not None and st.session_state.is_compressed:
+                name_part, ext_part = os.path.splitext(default_save_name)
+                if "_compressed" not in name_part:
+                    default_save_name = f"{name_part}_compressed{ext_part}"
+            
             with st.form("gdrive_upload_form"):
-                folder_input = st.text_input("📁 Tên thư mục đích trên Drive (Ví dụ: 109):", value=suggested_folder)
-                filename_input = st.text_input("📄 Tên file lưu trữ trên Drive:", value=suggested_name)
-                submit_upload = st.form_submit_button("🚀 Xác nhận Tải lên Drive")
+                target_folder = st.text_input("📁 Tên thư mục lưu trữ (Ví dụ: 055, 109):", value=default_folder)
+                save_name = st.text_input("📄 Tên file sẽ lưu trên Drive:", value=default_save_name)
+                
+                submit_upload = st.form_submit_button("🚀 Xác nhận tải lên Drive")
                 
                 if submit_upload:
-                    with st.spinner("⏳ Đang tiến hành tải dữ liệu lên Google Drive..."):
-                        # Liên kết thông minh: Ưu tiên lấy file nén nếu đã nhấn Compress trước, ngược lại lấy file gốc
-                        final_bytes = st.session_state.compressed_bytes if st.session_state.compressed_bytes is not None else file_bytes
-                        
-                        if service is not None:
-                            # 1. Tìm hoặc tạo thư mục con dưới thư mục mẹ
-                            target_folder_id = find_or_create_folder(service, folder_input, PARENT_FOLDER_ID)
-                            if target_folder_id:
-                                # 2. Upload file lên Drive
-                                uploaded_result = upload_file_to_drive(service, final_bytes, filename_input, mime_type, target_folder_id)
-                                if uploaded_result:
-                                    st.success(f"🎉 Tải lên thành công! File ID: `{uploaded_result.get('id')}`")
-                                    link = uploaded_result.get("webViewLink")
-                                    if link:
-                                        st.link_button("🔗 Mở file trên Drive", link)
-                            else:
-                                st.error("❌ Không thể xác định hoặc khởi tạo thư mục đích trên Drive.")
-                        else:
-                            st.error("❌ Dịch vụ Google Drive chưa được kích hoạt. Hãy cấu hình Secrets.")
+                    if not service:
+                        st.error("❌ Google Drive Service chưa được khởi tạo. Vui lòng cấu hình st.secrets.")
+                    else:
+                        with st.spinner("📤 Đang tải file lên Google Drive..."):
+                            upload_bytes = st.session_state.processed_file if st.session_state.processed_file is not None else file_bytes
                             
-    if GDRIVE_ENABLED and service is None:
-        st.info("💡 Hướng dẫn cấu hình st.secrets nằm trong file README-v5.md.")
-        
+                            folder_id = find_or_create_folder(service, target_folder, PARENT_FOLDER_ID)
+                            if folder_id:
+                                uploaded_gfile = upload_file_to_drive(service, upload_bytes, save_name, mime_type, folder_id)
+                                if uploaded_gfile:
+                                    st.success(f"🎉 Tải lên thành công! File ID: `{uploaded_gfile.get('id')}`")
+                                    st.markdown(f"🔗 **Đường dẫn truy cập:** [{uploaded_gfile.get('webViewLink')}]({uploaded_gfile.get('webViewLink')})")
+                                    st.session_state.show_upload_form = False
+                                else:
+                                    st.error("❌ Tải lên thất bại. Vui lòng kiểm tra lại file hoặc quyền truy cập.")
+                            else:
+                                st.error("❌ Không thể xác định thư mục lưu trữ.")
+                                
+        if GDRIVE_ENABLED and service is None:
+            st.info("💡 Hướng dẫn cấu hình st.secrets nằm trong file README-v5.md.")
+            
     st.markdown("<div class='main-container-spacer'></div>", unsafe_allow_html=True)
     st.markdown(
         """
         <div class='nobita-footer'>
             © 2026 Attachment Center. All Rights Reserved. Developed by <b>Nobita</b>
         </div>
-        """, 
+        """,
         unsafe_allow_html=True
     )
