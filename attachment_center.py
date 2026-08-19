@@ -337,13 +337,3 @@ def show_attachment_center():
                                 
         if GDRIVE_ENABLED and service is None:
             st.info("💡 Hướng dẫn cấu hình st.secrets nằm trong file README-v5.md.")
-
-    st.markdown("<div class='main-container-spacer'></div>", unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div class='nobita-footer'>
-            © 2026 Attachment Center. All Rights Reserved. Developed by <b>Nobita</b>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
