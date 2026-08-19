@@ -209,7 +209,7 @@ if df_games is not None:
             st.session_state.app_mode = "🎮 Quản lý Cổng Game"
             st.rerun()
             
-        st.sidebar.info("💡 Click Upload trước để upload file gốc</br>Click Upload sau khi nén để upload file đã nén.")
+        st.sidebar.info("💡 Click Upload trước để upload file gốc\nClick Upload sau khi nén để upload file đã nén.")
         
     # Thêm Copyright trong Sidebar
     st.sidebar.write("---")
