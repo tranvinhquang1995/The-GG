@@ -178,7 +178,7 @@ if df_games is not None:
        # if st.sidebar.button("📎 Attachment Center", use_container_width=True):
        #     st.session_state.app_mode = "📎 Attachment Center"
        #     st.rerun()
-        st.sidebar.button("📎 Attachment Center(Bảo trì)", use_container_width=True, disabled=True)
+        st.sidebar.button("📎 Attachment Center (Bảo trì)", use_container_width=True, disabled=True)
 
         # Danh sách các Portal duy nhất
         portals = sorted(df_games['Portal'].unique())
